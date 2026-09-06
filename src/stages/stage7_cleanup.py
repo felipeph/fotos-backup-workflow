@@ -4,6 +4,7 @@ from datetime import datetime
 
 from src.project import Project
 from src.config import PipelineConfig
+from src.telemetry import create_item_progress, print_stage_header, print_stage_summary, console
 
 def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = False) -> bool:
     """
@@ -16,7 +17,7 @@ def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     ]
 
     if not candidates:
-        print("\nℹ️  [ETAPA 7] Nenhum arquivo elegível para limpeza neste projeto.")
+        console.print("\n[yellow]ℹ️  [ETAPA 7] Nenhum arquivo elegível para limpeza neste projeto.[/yellow]")
         project.current_stage = max(project.current_stage, 7)
         project.save()
         return True
@@ -33,25 +34,24 @@ def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
             total_bytes += it.file_size_bytes
 
     if not verified_candidates:
-        print("\nℹ️  [ETAPA 7] Os arquivos já haviam sido limpos ou não foram encontrados no disco.")
+        console.print("\n[yellow]ℹ️  [ETAPA 7] Os arquivos já haviam sido limpos ou não foram encontrados no disco.[/yellow]")
         project.current_stage = max(project.current_stage, 7)
         project.save()
         return True
 
     total_mb = total_bytes / (1024 * 1024)
-    print(f"\n🧹 [ETAPA 7] LIMPEZA DE ARQUIVOS ENVIADOS NO SSD:")
-    print(f"   Arquivos com upload comprovado no Google Fotos: {len(verified_candidates)}")
-    print(f"   Espaço total que será liberado no SSD:          {total_mb:.2f} MB ({total_mb / 1024:.2f} GB)")
+    print_stage_header("ETAPA 7: LIMPEZA DE ARQUIVOS NO SSD", total_items=len(verified_candidates), total_bytes=total_bytes)
+    start_time = datetime.now()
 
     confirmed = auto_confirm
     if not auto_confirm:
-        print("\n⚠️  [CONFIRMAÇÃO NECESSÁRIA]")
-        print("Estes arquivos já estão salvos com segurança na nuvem (Google Fotos).")
-        resp = input("Deseja apagar agora as cópias locais destes arquivos da pasta UPLOADED? (s/N): ").strip().lower()
+        console.print("\n[bold yellow]⚠️  [CONFIRMAÇÃO NECESSÁRIA - EXCLUSÃO LOCAL][/bold yellow]")
+        console.print("Estes arquivos já estão salvos com segurança na nuvem (Google Fotos).")
+        resp = input(f"Deseja apagar agora as {len(verified_candidates)} cópias locais da pasta UPLOADED liberando {total_mb:.1f} MB? (s/N): ").strip().lower()
         confirmed = (resp == "s")
 
     if not confirmed:
-        print("ℹ️  Limpeza cancelada pelo usuário. Os arquivos foram mantidos no SSD.")
+        console.print("ℹ️  Limpeza cancelada pelo usuário. Os arquivos foram mantidos no SSD.")
         return False
 
     log_dir = Path("logs")
@@ -63,21 +63,34 @@ def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
         log.write(f"=== INÍCIO ETAPA 7 (LIMPEZA PÓS-UPLOAD): {datetime.now().isoformat()} ===\n")
         log.write(f"Total de arquivos a remover: {len(verified_candidates)} ({total_mb:.2f} MB)\n\n")
 
-        for idx, it in enumerate(verified_candidates, start=1):
-            p = Path(it.uploaded_path)
-            try:
-                if p.exists():
-                    p.unlink()
-                    it.cleaned_at = datetime.now().isoformat()
-                    deleted_count += 1
-                    log.write(f"[{idx}/{len(verified_candidates)}] APAGADO: {p}\n")
-                    sys.stdout.write(f"\r[{idx}/{len(verified_candidates)}] 🗑️  {p.name[:45]:<45}")
-                    sys.stdout.flush()
-            except Exception as e:
-                log.write(f"[ERRO] Falha ao apagar {p}: {e}\n")
+        with create_item_progress(unit="arqs/s") as progress:
+            task_id = progress.add_task("[bold blue]Exclusão Segura no SSD", total=len(verified_candidates))
 
-    project.current_stage = 7
+            for idx, it in enumerate(verified_candidates, start=1):
+                p = Path(it.uploaded_path)
+                try:
+                    if p.exists():
+                        p.unlink()
+                        it.cleaned_at = datetime.now().isoformat()
+                        deleted_count += 1
+                        log.write(f"[{idx}/{len(verified_candidates)}] APAGADO: {p}\n")
+                except Exception as e:
+                    log.write(f"[ERRO] Falha ao apagar {p}: {e}\n")
+
+                progress.update(task_id, advance=1)
+
+                if idx % 25 == 0:
+                    project.save()
+
+    project.current_stage = max(project.current_stage, 7)
     project.save()
 
-    print(f"\n\n✨ Limpeza concluída: {deleted_count} arquivos apagados. {total_mb:.2f} MB liberados no SSD!")
+    print_stage_summary(
+        "Etapa 7 (Limpeza SSD)",
+        start_time,
+        success=True,
+        items_done=deleted_count,
+        bytes_done=total_bytes,
+    )
+    console.print(f"✨ [bold green]Limpeza concluída:[/bold green] {deleted_count} arquivos apagados. [cyan]{total_mb:.1f} MB[/cyan] liberados no SSD!\n")
     return True

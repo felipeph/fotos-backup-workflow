@@ -6,6 +6,7 @@ from datetime import datetime
 
 from src.project import Project
 from src.config import PipelineConfig
+from src.telemetry import print_stage_header, print_stage_summary, console
 
 def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = False) -> bool:
     """
@@ -36,14 +37,8 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     total = len(upload_candidates)
     bib_path = config.biblioteca_path
 
-    print(f"\n☁️  [ETAPA 4] UPLOAD MANUAL NO GOOGLE FOTOS WEB (Storage Saver)")
-    print("=" * 65)
-    print(f"  📸 Total de fotos pendentes para upload: {total}")
-    print(f"  📂 Pasta no SSD: {bib_path}")
-    print(f"  🌐 Acesse no navegador: https://photos.google.com")
-    print("=" * 65)
-    print("Dica: No navegador, garanta que a opção 'Economia de Armazenamento'")
-    print("está selecionada nas configurações do Google Fotos.\n")
+    print_stage_header("ETAPA 4: CONFIRMAÇÃO DE UPLOAD WEB (GOOGLE FOTOS)", total_items=total)
+    start_time = datetime.now()
 
     confirmed = auto_confirm
 
@@ -79,6 +74,7 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     project.current_stage = max(project.current_stage, 4)
     project.save()
 
-    print(f"\n✅ [ETAPA 4] Sucesso! {total} fotos marcadas como enviadas no project_plan.json.")
-    print("As fotos confirmadas agora estão prontas para a Etapa 5 (Mover para UPLOADED/).")
+    print_stage_summary("Etapa 4 (Confirmação Upload Web)", start_time, success=True, items_done=total)
+    console.print(f"✅ [bold green]Sucesso![/bold green] {total} fotos marcadas como enviadas no project_plan.json.")
+    console.print("As fotos confirmadas agora estão prontas para a Etapa 5 (Mover para UPLOADED/).\n")
     return True

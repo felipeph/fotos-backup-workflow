@@ -6,6 +6,8 @@ from src.project import Project
 from src.config import PipelineConfig
 from src.metadata_extractor import extract_metadata_batch, PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
 from src.classifier import classify_media_batch
+from src.telemetry import create_item_progress, print_stage_header, print_stage_summary, console
+from rich.table import Table
 
 def run_stage2(project: Project, config: PipelineConfig) -> bool:
     """
@@ -14,7 +16,7 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
     """
     staging_dir = config.staging_path / project.project_id / "raw"
     if not staging_dir.exists():
-        print(f"[ERRO] Pasta de staging não encontrada: {staging_dir}. Execute a Etapa 1 primeiro.")
+        console.print(f"[red][ERRO] Pasta de staging não encontrada: {staging_dir}. Execute a Etapa 1 primeiro.[/red]")
         return False
 
     valid_exts = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
@@ -28,11 +30,20 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
                 files.append(p)
 
     if not files:
-        print(f"[AVISO] Nenhum arquivo para planejar em {staging_dir}.")
+        console.print(f"[yellow][AVISO] Nenhum arquivo para planejar em {staging_dir}.[/yellow]")
         return False
 
-    print(f"\n📝 [ETAPA 2] Extraindo metadados e gerando plano de renomeação para {len(files)} arquivos...")
-    meta_list = extract_metadata_batch(files)
+    print_stage_header("ETAPA 2: CRIAÇÃO DO PLANO E CLASSIFICAÇÃO", total_items=len(files))
+    start_time = datetime.now()
+
+    with create_item_progress(unit="arqs/s") as progress:
+        task_id = progress.add_task("[bold blue]Extração de Metadados", total=len(files))
+        def on_progress(done, total):
+            progress.update(task_id, completed=done)
+
+        meta_list = extract_metadata_batch(files, progress_callback=on_progress)
+
+    console.print("⚙️  [cyan]Classificando e agrupando mídias (Astro, GoPro, Vídeos, Rajadas, Avulsas)...[/cyan]")
     classified_items = classify_media_batch(meta_list, config)
 
     # Map of staging path -> ClassifiedItem
@@ -58,13 +69,23 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
 
                 log.write(f"[{it.category.upper()}] {Path(it.staging_path).name} -> {it.relative_dest_dir}/{it.target_filename}\n")
 
-    print(f"\n📊 Resumo do Planejamento:")
-    for cat, count in cat_counts.items():
-        print(f"   - {cat}: {count} arquivos")
+    # Display Rich summary table
+    table = Table(title="Resumo do Planejamento por Categoria", border_style="cyan")
+    table.add_column("Categoria", style="bold white")
+    table.add_column("Quantidade", justify="right", style="green")
+    table.add_column("Percentual", justify="right", style="yellow")
 
-    project.current_stage = 2
+    total_classified = len(project.items)
+    for cat, count in cat_counts.items():
+        pct = (count / total_classified * 100) if total_classified > 0 else 0.0
+        table.add_row(cat, f"{count:,}", f"{pct:.1f}%")
+
+    console.print(table)
+
+    project.current_stage = max(project.current_stage, 2)
     project.save()
 
-    print(f"\n✅ Plano registrado com sucesso em: {project.plan_file}")
-    print(f"📋 Log detalhado registrado em:     {log_file}")
+    print_stage_summary("Etapa 2 (Criação do Plano JSON)", start_time, success=True, items_done=len(files))
+    console.print(f"✅ Plano registrado com sucesso em: [bold green]{project.plan_file}[/bold green]")
+    console.print(f"📋 Log detalhado registrado em:     [dim]{log_file}[/dim]\n")
     return True

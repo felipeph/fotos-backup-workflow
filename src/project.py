@@ -49,8 +49,12 @@ class Project:
             "updated_at": self.updated_at,
             "items": [asdict(it) for it in self.items],
         }
-        with open(self.plan_file, "w", encoding="utf-8") as f:
+        temp_file = self.plan_file.with_suffix(".tmp")
+        with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        temp_file.replace(self.plan_file)
 
 def list_projects() -> list[str]:
     if not PROJECTS_DIR.exists():

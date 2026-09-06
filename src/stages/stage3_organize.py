@@ -6,6 +6,7 @@ from datetime import datetime
 from src.project import Project
 from src.config import PipelineConfig
 from src.storage import safe_copy_file, compute_sha256
+from src.telemetry import create_item_progress, print_stage_header, print_stage_summary, console
 
 def run_stage3(project: Project, config: PipelineConfig) -> bool:
     """
@@ -13,7 +14,7 @@ def run_stage3(project: Project, config: PipelineConfig) -> bool:
     seguindo as especificações registradas no project_plan.json.
     """
     if project.current_stage < 2 or not project.items:
-        print("[ERRO] Plano não encontrado ou não gerado. Execute a Etapa 2 primeiro.")
+        console.print("[red][ERRO] Plano não encontrado ou não gerado. Execute a Etapa 2 primeiro.[/red]")
         return False
 
     log_dir = Path("logs")
@@ -22,42 +23,61 @@ def run_stage3(project: Project, config: PipelineConfig) -> bool:
 
     dest_root = config.destination_path
     total = len(project.items)
-    print(f"\n🏷️  [ETAPA 3] Executando renomeação e organização física de {total} arquivos...")
-    print(f"   Destino Raiz: {dest_root}")
-    print(f"   Log:          {log_file}\n")
+    
+    total_bytes = sum(it.file_size_bytes for it in project.items)
+    print_stage_header("ETAPA 3: RENOMEAÇÃO E ORGANIZAÇÃO FÍSICA", total_items=total, total_bytes=total_bytes)
+    start_time = datetime.now()
 
     success_count = 0
     with open(log_file, "a", encoding="utf-8") as log:
         log.write(f"=== INÍCIO ETAPA 3 (ORGANIZAÇÃO): {datetime.now().isoformat()} ===\n\n")
 
-        for idx, it in enumerate(project.items, start=1):
-            src_p = Path(it.staging_path)
-            if not src_p.exists():
-                # Already moved or missing
+        with create_item_progress(unit="arqs/s") as progress:
+            task_id = progress.add_task("[bold blue]Organização no SSD", total=total)
+
+            for idx, it in enumerate(project.items, start=1):
+                # Check if already organized in a previous run (Resume)
                 if it.organized_path and Path(it.organized_path).exists():
                     success_count += 1
+                    progress.update(task_id, advance=1)
+                    log.write(f"[{idx}/{total}] RESUME-OK | {it.organized_path}\n")
                     continue
-                log.write(f"[ERRO] Arquivo de staging não encontrado: {src_p}\n")
-                continue
 
-            target_dir = dest_root / it.relative_dest_dir
-            res = safe_copy_file(src_p, target_dir, it.target_filename)
+                src_p = Path(it.staging_path)
+                if not src_p.exists():
+                    log.write(f"[ERRO] Arquivo de staging não encontrado: {src_p}\n")
+                    progress.update(task_id, advance=1)
+                    continue
 
-            if res.status in ("copied", "skipped_duplicate"):
-                it.organized_path = str(res.target_path.resolve())
-                success_count += 1
-                log.write(f"[{idx}/{total}] OK | {res.status} | {res.target_path}\n")
-                sys.stdout.write(f"\r[{idx}/{total}] ✅ {res.target_path.name[:45]:<45}")
-                sys.stdout.flush()
+                target_dir = dest_root / it.relative_dest_dir
+                res = safe_copy_file(src_p, target_dir, it.target_filename)
 
-                # Remove staging raw file now that it is safely in final organized destination
-                src_p.unlink(missing_ok=True)
-            else:
-                log.write(f"[{idx}/{total}] ERRO | {res.error_message} | {src_p}\n")
-                print(f"\n❌ Erro ao organizar {src_p.name}: {res.error_message}")
+                if res.status in ("copied", "skipped_duplicate"):
+                    it.organized_path = str(res.target_path.resolve())
+                    success_count += 1
+                    log.write(f"[{idx}/{total}] OK | {res.status} | {res.target_path}\n")
 
-    project.current_stage = 3
+                    # Remove staging raw file now that it is safely in final organized destination
+                    src_p.unlink(missing_ok=True)
+                else:
+                    log.write(f"[{idx}/{total}] ERRO | {res.error_message} | {src_p}\n")
+                    console.print(f"\n[red]❌ Erro ao organizar {src_p.name}: {res.error_message}[/red]")
+
+                progress.update(task_id, advance=1)
+
+                # Incremental checkpointing every 25 files
+                if idx % 25 == 0:
+                    project.save()
+
+    if success_count == total:
+        project.current_stage = max(project.current_stage, 3)
     project.save()
 
-    print(f"\n\n✨ Organização física concluída: {success_count}/{total} arquivos organizados com sucesso!")
+    print_stage_summary(
+        "Etapa 3 (Organização Física)",
+        start_time,
+        success=(success_count == total),
+        items_done=success_count,
+        bytes_done=total_bytes,
+    )
     return success_count == total

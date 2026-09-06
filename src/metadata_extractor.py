@@ -2,6 +2,9 @@ import subprocess
 import json
 import shutil
 import re
+import os
+import tempfile
+from typing import Callable, Optional
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
@@ -96,8 +99,11 @@ def format_duration(seconds: float | None) -> str:
         return f"{m:02d}m{s:02d}s"
     return f"{s:02d}s"
 
-def extract_metadata_batch(file_paths: list[Path]) -> list[MediaMetadata]:
-    """Extracts metadata for a batch of files using exiftool and ffprobe."""
+def extract_metadata_batch(
+    file_paths: list[Path],
+    progress_callback: Optional[Callable[[int, int], None]] = None
+) -> list[MediaMetadata]:
+    """Extracts metadata for a batch of files using exiftool in safe chunks with an argfile and ffprobe."""
     if not file_paths:
         return []
 
@@ -108,34 +114,55 @@ def extract_metadata_batch(file_paths: list[Path]) -> list[MediaMetadata]:
     exif_map: dict[str, dict] = {}
 
     if exiftool_bin:
-        try:
-            cmd = [
-                exiftool_bin,
-                "-json",
-                "-DateTimeOriginal",
-                "-CreateDate",
-                "-ModifyDate",
-                "-Model",
-                "-Make",
-                "-FocalLengthIn35mmFormat",
-                "-FocalLength",
-                "-FNumber",
-                "-ExposureTime",
-                "-ISO",
-                "-ImageWidth",
-                "-ImageHeight",
-                "-Duration",
-                "-VideoFrameRate",
-            ] + [str(p) for p in file_paths]
+        batch_size = 500
+        for i in range(0, len(file_paths), batch_size):
+            batch = file_paths[i:i + batch_size]
+            with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as f:
+                for p in batch:
+                    f.write(f"{p.resolve()}\n")
+                argfile = f.name
 
-            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-            if proc.returncode == 0 and proc.stdout:
-                parsed = json.loads(proc.stdout)
-                for item in parsed:
-                    src_file = Path(item.get("SourceFile", "")).resolve()
-                    exif_map[str(src_file)] = item
-        except Exception as e:
-            print(f"[WARN] Falha ao rodar exiftool em lote: {e}")
+            try:
+                cmd = [
+                    exiftool_bin,
+                    "-json",
+                    "-charset", "filename=utf8",
+                    "-DateTimeOriginal",
+                    "-CreateDate",
+                    "-ModifyDate",
+                    "-Model",
+                    "-Make",
+                    "-FocalLengthIn35mmFormat",
+                    "-FocalLength",
+                    "-FNumber",
+                    "-ExposureTime",
+                    "-ISO",
+                    "-ImageWidth",
+                    "-ImageHeight",
+                    "-Duration",
+                    "-VideoFrameRate",
+                    "-@",
+                    argfile,
+                ]
+
+                proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                if proc.returncode == 0 and proc.stdout:
+                    parsed = json.loads(proc.stdout)
+                    for item in parsed:
+                        src_file = Path(item.get("SourceFile", "")).resolve()
+                        exif_map[str(src_file)] = item
+                elif proc.returncode != 0 and proc.stderr:
+                    print(f"[WARN] Erro no exiftool lote {i}-{i+len(batch)}: {proc.stderr[:150]}")
+            except Exception as e:
+                print(f"[WARN] Falha ao rodar exiftool em lote ({i}-{i+len(batch)}): {e}")
+            finally:
+                try:
+                    os.unlink(argfile)
+                except OSError:
+                    pass
+
+            if progress_callback:
+                progress_callback(min(i + len(batch), len(file_paths)), len(file_paths))
 
     for p in file_paths:
         p_res = p.resolve()

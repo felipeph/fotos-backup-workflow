@@ -19,6 +19,9 @@ from src.stages import (
 )
 from src.tui import display_menu, settings_menu, project_selection_menu, clear_screen, print_banner
 
+from rich.table import Table
+from src.telemetry import console
+
 STAGE_FUNCTIONS = {
     1: ("Etapa 1 (Ingestão SD -> SSD)", run_stage1),
     2: ("Etapa 2 (Criação do Plano JSON)", run_stage2),
@@ -31,18 +34,22 @@ STAGE_FUNCTIONS = {
 
 def execute_stage(stage_num: int, project: Project, config: PipelineConfig, **kwargs) -> bool:
     name, fn = STAGE_FUNCTIONS[stage_num]
-    print(f"\n========================================================")
-    print(f"  ▶️  INICIANDO {name.upper()}")
-    print(f"========================================================")
 
-    if stage_num == 1:
-        success = fn(project, config, auto_delete_sd=kwargs.get("auto_delete_sd", False))
-    elif stage_num == 4:
-        success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_upload", False))
-    elif stage_num == 7:
-        success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_cleanup", False))
-    else:
-        success = fn(project, config)
+    try:
+        if stage_num == 1:
+            success = fn(project, config, auto_delete_sd=kwargs.get("auto_delete_sd", False))
+        elif stage_num == 4:
+            success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_upload", False))
+        elif stage_num == 7:
+            success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_cleanup", False))
+        else:
+            success = fn(project, config)
+    except KeyboardInterrupt:
+        console.print(f"\n[bold yellow]🛑 Execução interrompida pelo usuário (Ctrl+C).[/bold yellow]")
+        console.print(f"💾 Checkpoint salvo no projeto '[bold cyan]{project.project_id}[/bold cyan]'.")
+        console.print("ℹ️ O progresso foi preservado. Você pode retomar a qualquer momento!\n")
+        project.save()
+        return False
 
     if success:
         notify_event(
@@ -51,41 +58,66 @@ def execute_stage(stage_num: int, project: Project, config: PipelineConfig, **kw
             config=config.notifications
         )
     else:
-        print(f"\n⚠️  {name} encerrou com avisos ou pendências.")
+        console.print(f"\n[yellow]⚠️  {name} encerrou com avisos ou pendências.[/yellow]")
 
     return success
 
 def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool = False):
-    print(f"\n🚀 [EXECUTAR TUDO] Iniciando pipeline sequencial para '{project.project_id}'...")
+    console.print(f"\n🚀 [bold green][EXECUTAR TUDO][/bold green] Iniciando pipeline sequencial para '[bold cyan]{project.project_id}[/bold cyan]'...")
+    start_global = datetime.now()
+    stage_results = []
 
     for st in range(1, 8):
-        # Skip stages already completed if resuming
+        name, _ = STAGE_FUNCTIONS[st]
         if project.current_stage >= st:
-            print(f"ℹ️  Etapa {st} já concluída anteriormente neste projeto. Pulando...")
+            console.print(f"[dim]ℹ️  Etapa {st} já concluída anteriormente neste projeto. Pulando...[/dim]")
+            stage_results.append((st, name, "Pulada (Já Concluída)", "--"))
             continue
 
-        name, _ = STAGE_FUNCTIONS[st]
-        ok = execute_stage(
-            st,
-            project,
-            config,
-            auto_delete_sd=auto_confirm,
-            auto_confirm_upload=auto_confirm,
-            auto_confirm_cleanup=auto_confirm,
-        )
+        st_start = datetime.now()
+        try:
+            ok = execute_stage(
+                st,
+                project,
+                config,
+                auto_delete_sd=auto_confirm,
+                auto_confirm_upload=auto_confirm,
+                auto_confirm_cleanup=auto_confirm,
+            )
+        except KeyboardInterrupt:
+            console.print(f"\n[bold yellow]🛑 Pipeline sequencial interrompido pelo usuário (Ctrl+C).[/bold yellow]")
+            stage_results.append((st, name, "Interrompida", str(datetime.now() - st_start).split(".")[0]))
+            break
+
+        dur = str(datetime.now() - st_start).split(".")[0]
+        status_label = "Concluída" if ok else "Pendente/Aviso"
+        stage_results.append((st, name, status_label, dur))
+
         if not ok and st in (1, 2, 3, 4):
-            print(f"\n🛑 Interrompendo sequência pois a {name} não foi concluída.")
-            return
+            console.print(f"\n[bold red]🛑 Interrompendo sequência pois a {name} não foi concluída.[/bold red]")
+            break
 
         # Countdown pause of 180s between stages (except after final stage 7)
         if st < 7:
             next_name, _ = STAGE_FUNCTIONS[st + 1]
             act = countdown_prompt(f"Avançar para {next_name}", timeout_seconds=config.countdown_seconds)
             if act == "cancel":
-                print("\n🛑 Sequência interrompida pelo usuário.")
-                return
+                console.print("\n[yellow]🛑 Sequência interrompida pelo usuário no countdown.[/yellow]")
+                break
 
-    print(f"\n🎉 [SUCESSO TOTAL] Todas as 7 etapas do projeto '{project.project_id}' foram executadas!")
+    total_dur = str(datetime.now() - start_global).split(".")[0]
+    table = Table(title=f"Resumo da Execução - Projeto {project.project_id}", border_style="bright_blue")
+    table.add_column("Etapa", style="bold")
+    table.add_column("Nome", style="white")
+    table.add_column("Status", style="cyan")
+    table.add_column("Duração", justify="right", style="green")
+
+    for st_num, sname, sstat, sdur in stage_results:
+        table.add_row(str(st_num), sname, sstat, sdur)
+
+    console.print("\n")
+    console.print(table)
+    console.print(f"⏱️  Tempo total de execução: [bold]{total_dur}[/bold]\n")
 
 def interactive_loop():
     config = load_config()
@@ -95,40 +127,44 @@ def interactive_loop():
     active_project: Project | None = load_project(projs[0]) if projs else None
 
     while True:
-        clear_screen()
-        choice = display_menu(config, active_project)
+        try:
+            clear_screen()
+            choice = display_menu(config, active_project)
 
-        if choice == "0":
-            print("\n👋 Encerrando. Até logo!")
+            if choice == "0":
+                console.print("\n👋 [bold green]Encerrando. Até logo![/bold green]\n")
+                break
+
+            elif choice.upper() == "P":
+                active_project = project_selection_menu(active_project)
+
+            elif choice.upper() == "C":
+                settings_menu(config)
+
+            elif choice == "" or choice.upper() == "A":
+                # ENTER or A: RUN ALL
+                if not active_project:
+                    active_project = project_selection_menu(active_project)
+                    if not active_project:
+                        continue
+                clear_screen()
+                run_all_stages(active_project, config)
+                input("\nPressione ENTER para voltar ao menu...")
+
+            elif choice in [str(i) for i in range(1, 8)]:
+                st = int(choice)
+                if not active_project:
+                    console.print("\n[yellow]ℹ️  Nenhum projeto selecionado. Crie ou selecione um projeto primeiro.[/yellow]")
+                    active_project = project_selection_menu(active_project)
+                    if not active_project:
+                        continue
+
+                clear_screen()
+                execute_stage(st, active_project, config)
+                input("\nPressione ENTER para voltar ao menu...")
+        except KeyboardInterrupt:
+            console.print("\n\n👋 [bold green]Encerrando. Até logo![/bold green]\n")
             break
-
-        elif choice.upper() == "P":
-            active_project = project_selection_menu(active_project)
-
-        elif choice.upper() == "C":
-            settings_menu(config)
-
-        elif choice == "" or choice.upper() == "A":
-            # ENTER or A: RUN ALL
-            if not active_project:
-                active_project = project_selection_menu(active_project)
-                if not active_project:
-                    continue
-            clear_screen()
-            run_all_stages(active_project, config)
-            input("\nPressione ENTER para voltar ao menu...")
-
-        elif choice in [str(i) for i in range(1, 8)]:
-            st = int(choice)
-            if not active_project:
-                print("\nℹ️  Nenhum projeto selecionado. Crie ou selecione um projeto primeiro.")
-                active_project = project_selection_menu(active_project)
-                if not active_project:
-                    continue
-
-            clear_screen()
-            execute_stage(st, active_project, config)
-            input("\nPressione ENTER para voltar ao menu...")
 
 def main():
     parser = argparse.ArgumentParser(description="Fotos Backup Workflow - Pipeline em 7 Etapas por Projeto")
