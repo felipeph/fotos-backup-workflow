@@ -56,10 +56,11 @@ Cada lote de fotos/vídeos é gerenciado como um **Projeto/Sessão** independent
 - Aplica a nomenclatura compacto-inteligente sem pontos na abertura (`f1-8`, `f6-5`).
 - Marca cada item como organizado no plano.
 
-### 4. Upload para o Google Fotos (Economia de Armazenamento)
+### 4. Confirmação de Upload no Google Fotos Web (Storage Saver)
 - Filtra apenas as fotos normais (`avulsas` e `rajadas`), isolando astrofotografia e timelapses.
-- Otimiza as fotos para o padrão oficial de Economia de Armazenamento (Storage Saver): redimensiona proporcionalmente imagens $>16\text{MP}$ para até $16\text{MP}$ com compressão JPEG de alta qualidade, preservando metadados EXIF.
-- Faz o upload seguro via API do Google Fotos com registro de log por foto.
+- Exibe o caminho local da pasta no SSD e oferece a abertura direta no Explorador de Arquivos para você arrastar para o [Google Fotos Web](https://photos.google.com).
+- Ao realizar o upload no navegador, o Google Fotos aplica nativamente o modo **Economia de Armazenamento** (Storage Saver) sem necessidade de credenciais complexas de API ou OAuth.
+- Pergunta ao usuário se o upload foi concluído com sucesso e grava o status `uploaded_at` no `project_plan.json`.
 
 ### 5. Transferência dos Enviados para a Pasta `UPLOADED/`
 - Para cada foto cujo upload foi confirmado com sucesso, move de `Biblioteca/` para `UPLOADED/Biblioteca/ANO/MES/DIA/...`.
@@ -95,7 +96,7 @@ O menu interativo será exibido:
   1. 📥 Etapa 1: Ingestão SD -> SSD (Verificação SHA-256 e limpeza do SD)
   2. 📝 Etapa 2: Scan dos arquivos e criação do plano (project_plan.json)
   3. 🏷️  Etapa 3: Executar renomeação e organização física
-  4. ☁️  Etapa 4: Upload Google Fotos (Modo Economia de Armazenamento)
+  4. ☁️  Etapa 4: Confirmação de Upload Web (Google Fotos - Storage Saver)
   5. 📦 Etapa 5: Mover fotos enviadas para pasta UPLOADED
   6. ⏱️  Etapa 6: Renderizar Timelapses (timelapse_studio.py)
   7. 🧹 Etapa 7: Limpeza de fotos enviadas no SSD (Baseado no log)
@@ -165,12 +166,6 @@ python -m pytest tests/ -v
     "toast_enabled": true,
     "sound_enabled": true,
     "ntfy_topic": "seu-topico-aqui"
-  },
-  "google_photos": {
-    "credentials_file": "credentials.json",
-    "token_file": "token.json",
-    "auto_upload_after_countdown": true,
-    "album_name": ""
   }
 }
 ```

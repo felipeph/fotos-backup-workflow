@@ -1,45 +1,22 @@
-import sys
 import os
-import tempfile
+import sys
+import subprocess
 from pathlib import Path
 from datetime import datetime
-from PIL import Image
 
 from src.project import Project
 from src.config import PipelineConfig
-from src.google_photos import GooglePhotosManager
 
-def optimize_for_storage_saver(input_path: Path, output_path: Path, max_megapixels: float = 16.0, quality: int = 85):
+def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = False) -> bool:
     """
-    Otimiza a imagem para a especificação exata de 'Economia de Armazenamento' do Google Fotos:
-    - Redimensiona fotos maiores que 16MP proporcionalmente.
-    - Aplica compressão JPEG de alta qualidade (85) preservando EXIF.
-    """
-    with Image.open(input_path) as img:
-        exif = img.info.get("exif")
-        w, h = img.size
-        mp = (w * h) / 1_000_000.0
-
-        if mp > max_megapixels:
-            scale = (max_megapixels / mp) ** 0.5
-            new_w = int(w * scale)
-            new_h = int(h * scale)
-            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-        # Convert to RGB if needed (e.g. RGBA)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-
-        save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True}
-        if exif:
-            save_kwargs["exif"] = exif
-
-        img.save(output_path, **save_kwargs)
-
-def run_stage4(project: Project, config: PipelineConfig) -> bool:
-    """
-    Etapa 4: Upload das fotos normais (avulsas e rajadas, excluindo astro e timelapses)
-    para o Google Fotos na configuração de economia de armazenamento.
+    Etapa 4: Confirmação de Upload no Google Fotos Web.
+    
+    Como o upload oficial do Google Fotos via navegador aplica nativamente o modo
+    'Economia de Armazenamento' (Storage Saver) nos servidores do Google, esta etapa:
+    1. Aponta as fotos e pastas prontas na Biblioteca do SSD.
+    2. Dá a opção de abrir a pasta no Explorer para arrastar para photos.google.com.
+    3. Pergunta se o upload foi concluído com sucesso.
+    4. Ao confirmar, grava o timestamp de 'uploaded_at' de cada foto no project_plan.json.
     """
     if project.current_stage < 3 or not project.items:
         print("[ERRO] Arquivos ainda não foram organizados. Execute a Etapa 3 primeiro.")
@@ -56,59 +33,52 @@ def run_stage4(project: Project, config: PipelineConfig) -> bool:
         project.save()
         return True
 
-    print(f"\n☁️  [ETAPA 4] Iniciando upload de {len(upload_candidates)} fotos para o Google Fotos (Economia de Armazenamento)...")
+    total = len(upload_candidates)
+    bib_path = config.biblioteca_path
 
-    gp_mgr = GooglePhotosManager(config.google_photos, config.biblioteca_path)
-    if not gp_mgr.authenticate():
-        print("⚠️  [ETAPA 4] Autenticação com o Google Fotos não concluída. Upload pulado.")
-        return False
+    print(f"\n☁️  [ETAPA 4] UPLOAD MANUAL NO GOOGLE FOTOS WEB (Storage Saver)")
+    print("=" * 65)
+    print(f"  📸 Total de fotos pendentes para upload: {total}")
+    print(f"  📂 Pasta no SSD: {bib_path}")
+    print(f"  🌐 Acesse no navegador: https://photos.google.com")
+    print("=" * 65)
+    print("Dica: No navegador, garanta que a opção 'Economia de Armazenamento'")
+    print("está selecionada nas configurações do Google Fotos.\n")
 
+    confirmed = auto_confirm
+
+    if not confirmed:
+        # Oferece abrir a pasta no explorer no Windows
+        if sys.platform == "win32" and bib_path.exists():
+            open_folder = input("Deseja abrir a pasta da Biblioteca no Explorador de Arquivos? [S/N]: ").strip().lower()
+            if open_folder in ("s", "sim", "y", "yes"):
+                os.startfile(str(bib_path))
+
+        ans = input(f"\n❓ O upload das {total} fotos foi concluído com sucesso no Google Fotos? [S/N]: ").strip().lower()
+        if ans in ("s", "sim", "y", "yes"):
+            confirmed = True
+        else:
+            print("\n⏸️  Upload mantido como PENDENTE.")
+            print("Quando terminar de subir os arquivos no navegador, execute a Etapa 4 novamente.")
+            return False
+
+    # Usuário confirmou que o upload foi concluído
+    now_iso = datetime.now().isoformat()
     log_dir = Path("logs")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{project.project_id}_stage4_upload.log"
 
-    success_count = 0
     with open(log_file, "a", encoding="utf-8") as log:
-        log.write(f"=== INÍCIO ETAPA 4 (UPLOAD): {datetime.now().isoformat()} ===\n\n")
+        log.write(f"=== ETAPA 4 (CONFIRMAÇÃO DE UPLOAD WEB): {now_iso} ===\n")
+        log.write(f"Total de fotos confirmadas: {total}\n")
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
+        for idx, it in enumerate(upload_candidates, start=1):
+            it.uploaded_at = now_iso
+            log.write(f"[{idx}/{total}] CONFIRMADO_WEB | {it.target_filename or it.original_path}\n")
 
-            for idx, it in enumerate(upload_candidates, start=1):
-                org_file = Path(it.organized_path)
-                if not org_file.exists():
-                    log.write(f"[{idx}/{len(upload_candidates)}] ARQUIVO NÃO ENCONTRADO: {org_file}\n")
-                    continue
-
-                # Optimize to Storage Saver
-                opt_file = tmp_path / f"opt_{org_file.name}"
-                try:
-                    optimize_for_storage_saver(org_file, opt_file)
-                    target_to_upload = opt_file
-                except Exception as e:
-                    # Fallback to original if optimization fails
-                    log.write(f"[AVISO] Falha ao otimizar {org_file.name}, enviando original: {e}\n")
-                    target_to_upload = org_file
-
-                sys.stdout.write(f"\r[{idx}/{len(upload_candidates)}] ☁️  Enviando {org_file.name[:35]:<35}...")
-                sys.stdout.flush()
-
-                res = gp_mgr.upload_file(target_to_upload)
-
-                if res.status in ("uploaded", "already_uploaded"):
-                    it.uploaded_at = datetime.now().isoformat()
-                    it.upload_token = res.upload_token
-                    success_count += 1
-                    log.write(f"[{idx}/{len(upload_candidates)}] OK | {res.status} | {org_file.name}\n")
-                    sys.stdout.write(f"\r[{idx}/{len(upload_candidates)}] ✅ {org_file.name[:35]:<35} Enviado com sucesso!\n")
-                else:
-                    log.write(f"[{idx}/{len(upload_candidates)}] ERRO | {res.error_message} | {org_file.name}\n")
-                    print(f"\n❌ Erro ao enviar {org_file.name}: {res.error_message}")
-
-                opt_file.unlink(missing_ok=True)
-
-    project.current_stage = 4
+    project.current_stage = max(project.current_stage, 4)
     project.save()
 
-    print(f"\n✨ Upload concluído: {success_count}/{len(upload_candidates)} fotos enviadas com sucesso!")
-    return success_count > 0 or len(upload_candidates) == 0
+    print(f"\n✅ [ETAPA 4] Sucesso! {total} fotos marcadas como enviadas no project_plan.json.")
+    print("As fotos confirmadas agora estão prontas para a Etapa 5 (Mover para UPLOADED/).")
+    return True

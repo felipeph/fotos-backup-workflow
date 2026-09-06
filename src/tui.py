@@ -10,7 +10,7 @@ STAGE_NAMES = {
     1: "Etapa 1 Concluída (Ingestão SSD)",
     2: "Etapa 2 Concluída (Plano Criado)",
     3: "Etapa 3 Concluída (Organização Física)",
-    4: "Etapa 4 Concluída (Upload Google Fotos)",
+    4: "Etapa 4 Concluída (Upload Web Confirmado)",
     5: "Etapa 5 Concluída (Movido para UPLOADED)",
     6: "Etapa 6 Concluída (Timelapses Renderizados)",
     7: "Etapa 7 Concluída (Limpeza Efetuada)",
@@ -46,7 +46,7 @@ def display_menu(config: PipelineConfig, project: Project | None = None) -> str:
     print("  1. 📥 Etapa 1: Ingestão SD -> SSD (Verificação SHA-256 e limpeza do SD)")
     print("  2. 📝 Etapa 2: Scan dos arquivos e criação do plano (project_plan.json)")
     print("  3. 🏷️  Etapa 3: Executar renomeação e organização física")
-    print("  4. ☁️  Etapa 4: Upload Google Fotos (Modo Economia de Armazenamento)")
+    print("  4. ☁️  Etapa 4: Confirmação de Upload Web (Google Fotos - Storage Saver)")
     print("  5. 📦 Etapa 5: Mover fotos enviadas para pasta UPLOADED")
     print("  6. ⏱️  Etapa 6: Renderizar Timelapses (timelapse_studio.py)")
     print("  7. 🧹 Etapa 7: Limpeza de fotos enviadas no SSD (Baseado no log)")

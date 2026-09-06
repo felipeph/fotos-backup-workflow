@@ -23,7 +23,7 @@ STAGE_FUNCTIONS = {
     1: ("Etapa 1 (Ingestão SD -> SSD)", run_stage1),
     2: ("Etapa 2 (Criação do Plano JSON)", run_stage2),
     3: ("Etapa 3 (Organização Física)", run_stage3),
-    4: ("Etapa 4 (Upload Google Fotos)", run_stage4),
+    4: ("Etapa 4 (Confirmação Upload Web)", run_stage4),
     5: ("Etapa 5 (Mover para UPLOADED)", run_stage5),
     6: ("Etapa 6 (Timelapse Studio)", run_stage6),
     7: ("Etapa 7 (Limpeza SSD)", run_stage7),
@@ -37,6 +37,8 @@ def execute_stage(stage_num: int, project: Project, config: PipelineConfig, **kw
 
     if stage_num == 1:
         success = fn(project, config, auto_delete_sd=kwargs.get("auto_delete_sd", False))
+    elif stage_num == 4:
+        success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_upload", False))
     elif stage_num == 7:
         success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_cleanup", False))
     else:
@@ -63,8 +65,15 @@ def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool 
             continue
 
         name, _ = STAGE_FUNCTIONS[st]
-        ok = execute_stage(st, project, config, auto_delete_sd=auto_confirm, auto_confirm_cleanup=auto_confirm)
-        if not ok and st in (1, 2, 3):
+        ok = execute_stage(
+            st,
+            project,
+            config,
+            auto_delete_sd=auto_confirm,
+            auto_confirm_upload=auto_confirm,
+            auto_confirm_cleanup=auto_confirm,
+        )
+        if not ok and st in (1, 2, 3, 4):
             print(f"\n🛑 Interrompendo sequência pois a {name} não foi concluída.")
             return
 

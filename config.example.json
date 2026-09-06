@@ -14,11 +14,5 @@
     "toast_enabled": true,
     "sound_enabled": true,
     "ntfy_topic": "seu-topico-aqui"
-  },
-  "google_photos": {
-    "credentials_file": "credentials.json",
-    "token_file": "token.json",
-    "auto_upload_after_countdown": true,
-    "album_name": ""
   }
 }

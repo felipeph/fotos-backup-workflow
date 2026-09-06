@@ -8,6 +8,7 @@ from src.config import PipelineConfig
 from src.stages.stage1_ingest import run_stage1
 from src.stages.stage2_plan import run_stage2
 from src.stages.stage3_organize import run_stage3
+from src.stages.stage4_upload import run_stage4
 from src.stages.stage5_move_uploaded import run_stage5
 from src.stages.stage7_cleanup import run_stage7
 from src.metadata_extractor import MediaMetadata
@@ -40,7 +41,7 @@ def test_project_lifecycle_and_state_persistence():
         finally:
             src.project.PROJECTS_DIR = old_dir
 
-def test_stages_1_to_3_and_5_and_7_flow():
+def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         sd_card = root / "sd_card"
@@ -89,13 +90,21 @@ def test_stages_1_to_3_and_5_and_7_flow():
             assert proj.current_stage == 3
             assert Path(proj.items[0].organized_path).exists()
 
-            # --- ETAPA 5: Simulação de Upload e Transferência para UPLOADED ---
-            # Mark items as uploaded
-            proj.items[0].uploaded_at = datetime.now().isoformat()
-            proj.items[1].uploaded_at = datetime.now().isoformat()
-            proj.current_stage = 4
-            proj.save()
+            # --- ETAPA 4: Teste de Recusa (ainda não subiu) ---
+            monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+            ok4_declined = run_stage4(proj, cfg, auto_confirm=False)
+            assert ok4_declined is False
+            assert proj.current_stage == 3
+            assert proj.items[0].uploaded_at == ""
 
+            # --- ETAPA 4: Teste de Confirmação (upload web feito) ---
+            ok4_confirmed = run_stage4(proj, cfg, auto_confirm=True)
+            assert ok4_confirmed is True
+            assert proj.current_stage == 4
+            assert proj.items[0].uploaded_at != ""
+            assert proj.items[1].uploaded_at != ""
+
+            # --- ETAPA 5: Transferência para UPLOADED ---
             ok5 = run_stage5(proj, cfg)
             assert ok5 is True
             assert proj.current_stage == 5
