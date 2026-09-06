@@ -4,8 +4,8 @@ from src.metadata_extractor import MediaMetadata
 from src.config import NamingConfig
 
 def sanitize_filename(name: str) -> str:
-    # Replace illegal Windows filename chars with hyphen or underscore
-    clean = re.sub(r'[\\/*?:"<>|]', "-", name)
+    # Replace illegal Windows filename chars and dots with hyphen
+    clean = re.sub(r'[\\/*?:"<>|.]', "-", name)
     # Remove multiple consecutive underscores or hyphens
     clean = re.sub(r"_+", "_", clean)
     clean = re.sub(r"-+", "-", clean)

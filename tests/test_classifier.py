@@ -14,7 +14,7 @@ def create_mock_photo(name: str, ts: datetime, cam: str = "SX60", focal: float =
         camera_model=cam,
         focal_length_equiv=focal,
         focal_str=f"{int(focal)}mm",
-        aperture_str="f4.0",
+        aperture_str="f4",
         shutter_str="1-500s",
         iso_str="ISO200",
         resolution_str="16MP",

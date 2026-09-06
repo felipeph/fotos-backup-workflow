@@ -20,8 +20,8 @@ Projetado especialmente para fluxos mistos de câmeras dedicadas:
 
 2. **Nomenclatura Compacto-Inteligente (~60 a 70 caracteres)**:
    - Fotos: `YYYY-MM-DD_HH-mm-SS_{Camera}_{Focal}_{Abertura}_{Velocidade}_{ISO}_{Original}.ext`
-     - *Exemplo SX60:* `2026-09-06_14-25-30_SX60_1365mm_f6.5_1-1000s_ISO400_IMG9821.jpg`
-     - *Exemplo T6:* `2026-09-06_18-40-12_T6_50mm_f1.8_1-200s_ISO800_IMG4512.jpg`
+     - *Exemplo SX60:* `2026-09-06_14-25-30_SX60_1365mm_f6-5_1-1000s_ISO400_IMG9821.jpg`
+     - *Exemplo T6:* `2026-09-06_18-40-12_T6_50mm_f1-8_1-200s_ISO800_IMG4512.jpg`
    - Vídeos: `YYYY-MM-DD_HH-mm-SS_{Camera}_{Resolucao}_{FPS}_{Duracao}_{Original}.ext`
      - *Exemplo:* `2026-09-06_15-10-00_SX60_1080p_60fps_01m45s_MVI9822.mp4`
 
@@ -54,10 +54,10 @@ D:/Fotos_Organizadas/ (ou pasta configurada)
 │       └── 09/
 │           └── 06/
 │               ├── avulsas/
-│               │   └── 2026-09-06_14-10-05_SX60_50mm_f4.0_1-500s_ISO100_IMG1001.jpg
+│               │   └── 2026-09-06_14-10-05_SX60_50mm_f4_1-500s_ISO100_IMG1001.jpg
 │               ├── rajada_14-25-30/
-│               │   ├── 2026-09-06_14-25-30_SX60_1365mm_f6.5_1-1000s_ISO400_IMG1002.jpg
-│               │   └── 2026-09-06_14-25-31_SX60_1365mm_f6.5_1-1000s_ISO400_IMG1003.jpg
+│               │   ├── 2026-09-06_14-25-30_SX60_1365mm_f6-5_1-1000s_ISO400_IMG1002.jpg
+│               │   └── 2026-09-06_14-25-31_SX60_1365mm_f6-5_1-1000s_ISO400_IMG1003.jpg
 │               └── videos/
 │                   └── 2026-09-06_15-10-00_SX60_1080p_60fps_01m45s_MVI1004.mp4
 ├── Astrofotografia/
@@ -66,8 +66,8 @@ D:/Fotos_Organizadas/ (ou pasta configurada)
 │           └── 09/
 │               └── 06/
 │                   └── sessao_21-30-00/
-│                       ├── 2026-09-06_21-30-00_SX60_1365mm_f6.5_1-250s_ISO200_IMG2001.cr2
-│                       └── 2026-09-06_21-30-02_SX60_1365mm_f6.5_1-250s_ISO200_IMG2002.cr2
+│                       ├── 2026-09-06_21-30-00_SX60_1365mm_f6-5_1-250s_ISO200_IMG2001.cr2
+│                       └── 2026-09-06_21-30-02_SX60_1365mm_f6-5_1-250s_ISO200_IMG2002.cr2
 └── Timelapses/
     └── GoPro/
         └── 2026/

@@ -5,7 +5,7 @@ from src.namer import generate_target_filename, sanitize_filename
 from src.config import NamingConfig
 
 def test_sanitize_filename():
-    assert sanitize_filename('test:file*name?.jpg') == 'test-file-name-.jpg'
+    assert sanitize_filename('test:file*name?_f1.8') == 'test-file-name_f1-8'
     assert sanitize_filename('clean_name') == 'clean_name'
 
 def test_generate_photo_filename_sx60():
@@ -18,7 +18,7 @@ def test_generate_photo_filename_sx60():
         camera_model="SX60",
         focal_length_equiv=1365.0,
         focal_str="1365mm",
-        aperture_str="f6.5",
+        aperture_str="f6-5",
         shutter_str="1-1000s",
         iso_str="ISO400",
         resolution_str="16MP",
@@ -29,7 +29,7 @@ def test_generate_photo_filename_sx60():
         is_raw=False,
     )
     res = generate_target_filename(meta)
-    assert res == "2026-09-06_14-25-30_SX60_1365mm_f6.5_1-1000s_ISO400_IMG_9821.jpg"
+    assert res == "2026-09-06_14-25-30_SX60_1365mm_f6-5_1-1000s_ISO400_IMG_9821.jpg"
 
 def test_generate_photo_filename_t6():
     meta = MediaMetadata(
@@ -41,7 +41,7 @@ def test_generate_photo_filename_t6():
         camera_model="T6",
         focal_length_equiv=50.0,
         focal_str="50mm",
-        aperture_str="f1.8",
+        aperture_str="f1-8",
         shutter_str="1-200s",
         iso_str="ISO800",
         resolution_str="18MP",
@@ -52,7 +52,7 @@ def test_generate_photo_filename_t6():
         is_raw=False,
     )
     res = generate_target_filename(meta)
-    assert res == "2026-09-06_18-40-12_T6_50mm_f1.8_1-200s_ISO800_IMG_4512.jpg"
+    assert res == "2026-09-06_18-40-12_T6_50mm_f1-8_1-200s_ISO800_IMG_4512.jpg"
 
 def test_generate_video_filename():
     meta = MediaMetadata(

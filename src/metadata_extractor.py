@@ -61,9 +61,9 @@ def format_shutter(exposure_time) -> str:
         else:
             if val.is_integer():
                 return f"{int(val)}s"
-            return f"{val:.1f}s"
+            return f"{val:.1f}s".replace(".", "-")
     except (ValueError, TypeError):
-        s = str(exposure_time).replace("/", "-")
+        s = str(exposure_time).replace("/", "-").replace(".", "-")
         return f"{s}s"
 
 def format_aperture(fnumber) -> str:
@@ -73,9 +73,9 @@ def format_aperture(fnumber) -> str:
         val = float(fnumber)
         if val.is_integer():
             return f"f{int(val)}"
-        return f"f{val:.1f}"
+        return f"f{val:.1f}".replace(".", "-")
     except (ValueError, TypeError):
-        return f"f{fnumber}"
+        return f"f{fnumber}".replace(".", "-")
 
 def format_focal(focal_35mm, focal_real) -> tuple[float, str]:
     target = focal_35mm if focal_35mm else focal_real
