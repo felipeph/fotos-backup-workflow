@@ -1,6 +1,8 @@
 {
   "destination_root": "D:/Fotos_Organizadas",
-  "gopro_script_path": "",
+  "staging_dir": "D:/Fotos_Organizadas/staging",
+  "uploaded_dir": "D:/Fotos_Organizadas/UPLOADED",
+  "timelapse_studio_path": "C:/code/timelapse/timelapse_studio.py",
   "burst_interval_seconds": 3.0,
   "moon_zoom_threshold_mm": 1200.0,
   "countdown_seconds": 180,

@@ -1,153 +1,136 @@
-# 📸 Fotos Backup Workflow - Resilient Media Pipeline 🚀
+# 📸 Fotos Backup Workflow - Pipeline em 7 Etapas por Projeto 🚀
 
-Pipeline automatizado, modular e resiliente em Python para ingestão, classificação inteligente, renomeação padronizada, organização cronológica e backup seguro de fotos e vídeos com garantia de **Perda Zero (Zero-Loss)**.
+Pipeline automatizado, modular e resiliente em Python para ingestão, classificação inteligente, renomeação padronizada, organização cronológica, backup e limpeza segura de fotos e vídeos com garantia de **Perda Zero (Zero-Loss)**.
 
 Projetado especialmente para fluxos mistos de câmeras dedicadas:
 - **Canon PowerShot SX60 HS / SX50 HS**: Fotografia de pássaros (teleobjetiva máxima, rajadas rápidas), vídeos 1080p a 60fps, paisagens e astrofotografia da Lua em RAW (`.CR2`).
 - **Canon EOS Rebel T6 (50mm f/1.8)**: Retratos e eventos sociais.
-- **GoPro**: Sequências diárias de timelapses e vídeos dinâmicos.
+- **GoPro**: Sequências diárias de timelapses e integração com `timelapse_studio.py`.
 
 ---
 
-## 🌟 Funcionalidades Principais
+## 🎯 As 7 Etapas do Workflow
 
-1. **Classificação Automática & Separação de Mídia**:
-   - 🌕 **Astrofotografia da Lua**: Detecta arquivos RAW (`.CR2`) tirados com zoom teleobjetivo máximo na SX60/SX50 e isola em `Astrofotografia/Lua/ANO/MES/DIA/sessao_HH-mm-SS/` para stacking (AutoStakkert, Siril, PIPP, Registax).
-   - ⏱️ **Timelapses GoPro**: Agrupa sequências diárias de fotos da GoPro em `Timelapses/GoPro/ANO/MES/DIA/timelapse_HH-mm-SS/` com atalho no menu para executar seu script de compilação/publicação.
-   - 🦅 **Rajadas Rápidas (Pássaros & Ação)**: Agrupa disparos consecutivos com intervalo $\le 3\text{s}$ em `Biblioteca/ANO/MES/DIA/rajada_HH-mm-SS/`, facilitando escolher a melhor foto da série.
-   - 📷 **Fotos Avulsas & Retratos**: Fotos isoladas (Canon T6 / paisagens) são organizadas em `Biblioteca/ANO/MES/DIA/avulsas/`.
-   - 🎥 **Vídeos**: Vídeos das câmeras (incluindo 1080p 60fps) são organizados em `Biblioteca/ANO/MES/DIA/videos/`.
-
-2. **Nomenclatura Compacto-Inteligente (~60 a 70 caracteres)**:
-   - Fotos: `YYYY-MM-DD_HH-mm-SS_{Camera}_{Focal}_{Abertura}_{Velocidade}_{ISO}_{Original}.ext`
-     - *Exemplo SX60:* `2026-09-06_14-25-30_SX60_1365mm_f6-5_1-1000s_ISO400_IMG9821.jpg`
-     - *Exemplo T6:* `2026-09-06_18-40-12_T6_50mm_f1-8_1-200s_ISO800_IMG4512.jpg`
-   - Vídeos: `YYYY-MM-DD_HH-mm-SS_{Camera}_{Resolucao}_{FPS}_{Duracao}_{Original}.ext`
-     - *Exemplo:* `2026-09-06_15-10-00_SX60_1080p_60fps_01m45s_MVI9822.mp4`
-
-3. **Garantia de Perda Zero (Zero-Loss) & Desduplicação**:
-   - Cópia segura com cálculo e validação estrita de hash SHA-256 e tamanho de bytes antes e depois da cópia.
-   - Pula automaticamente fotos já importadas sem reprocessamento.
-   - **O cartão SD original nunca é alterado ou apagado** (a formatação é feita pelo usuário na própria câmera após checagem).
-
-4. **Upload Integrado para o Google Fotos com Contagem Regressiva (180s)**:
-   - Módulo OAuth2 padrão do Google com manifesto local (`.uploaded_manifest.json`) que previne reenvios.
-   - Timer interativo após a organização:
-     - `[ENTER]`: envia imediatamente.
-     - `[P]`: pausa o fluxo para você curar/selecionar com calma as fotos das rajadas.
-     - `[C]`: cancela o envio desta sessão.
-     - **Auto-avanço unattended**: se rodar de madrugada ou desacompanhado, o timer esgota e envia automaticamente.
-
-5. **Notificações Multicanal & Relatórios de Auditoria**:
-   - Notificações Toast nativas no Windows e aviso sonoro (`winsound`).
-   - Push móvel no aplicativo `ntfy.sh`.
-   - Relatórios automáticos em Markdown na pasta `reports/` com balanço matemático (*Definition of Done*) e histórico acumulado em `logs/history.jsonl`.
-
----
-
-## 🗂️ Estrutura da Biblioteca Gerada
+Cada lote de fotos/vídeos é gerenciado como um **Projeto/Sessão** independente, salvando seu estado no arquivo `projects/<project_id>/project_plan.json`. Você pode executar etapa por etapa de forma avulsa ou rodar tudo na sequência.
 
 ```text
-D:/Fotos_Organizadas/ (ou pasta configurada)
-├── Biblioteca/
-│   └── 2026/
-│       └── 09/
-│           └── 06/
-│               ├── avulsas/
-│               │   └── 2026-09-06_14-10-05_SX60_50mm_f4_1-500s_ISO100_IMG1001.jpg
-│               ├── rajada_14-25-30/
-│               │   ├── 2026-09-06_14-25-30_SX60_1365mm_f6-5_1-1000s_ISO400_IMG1002.jpg
-│               │   └── 2026-09-06_14-25-31_SX60_1365mm_f6-5_1-1000s_ISO400_IMG1003.jpg
-│               └── videos/
-│                   └── 2026-09-06_15-10-00_SX60_1080p_60fps_01m45s_MVI1004.mp4
-├── Astrofotografia/
-│   └── Lua/
-│       └── 2026/
-│           └── 09/
-│               └── 06/
-│                   └── sessao_21-30-00/
-│                       ├── 2026-09-06_21-30-00_SX60_1365mm_f6-5_1-250s_ISO200_IMG2001.cr2
-│                       └── 2026-09-06_21-30-02_SX60_1365mm_f6-5_1-250s_ISO200_IMG2002.cr2
-└── Timelapses/
-    └── GoPro/
-        └── 2026/
-            └── 09/
-                └── 06/
-                    └── timelapse_08-00-00/
-                        ├── 2026-09-06_08-00-00_GoPro_GOPR0001.jpg
-                        └── 2026-09-06_08-00-05_GoPro_GOPR0002.jpg
+[Cartão SD]
+    │
+    ▼ (Etapa 1: Cópia Bruta + SHA-256 por arquivo -> Apaga SD apenas se 100% OK)
+[SSD Staging: staging/<projeto>/raw/]
+    │
+    ▼ (Etapa 2: Scan EXIF/Vídeo -> Gera project_plan.json com mapeamento completo)
+[Plano JSON]
+    │
+    ▼ (Etapa 3: Executa renomeação e organização física nos destinos definitivos)
+[Biblioteca / Astrofotografia / Timelapses]
+    │
+    ├─► (Etapa 4: Upload das fotos normais no perfil Economia de Armazenamento do Google Fotos)
+    │        │
+    │        ▼
+    ├─► (Etapa 5: Move fotos enviadas com sucesso para a pasta UPLOADED/)
+    │        │
+    │        ▼
+    ├─► (Etapa 7: Limpeza segura no SSD dos arquivos em UPLOADED/ com base no log)
+    │
+    └─► (Etapa 6: Detecção de timelapses e renderização direta via timelapse_studio.py)
 ```
 
+### 1. Ingestão Bruta SD $\to$ SSD com Verificação SHA-256 e Limpeza do SD
+- Copia os arquivos brutos do cartão SD para a pasta temporária no SSD (`staging/<project_id>/raw/`).
+- Registra log detalhado arquivo por arquivo com conferência de hash SHA-256 e tamanho.
+- **Apaga os arquivos do cartão SD** com segurança após confirmar 100% de integridade no SSD.
+
+### 2. Leitura, Classificação & Criação do Plano (`project_plan.json`)
+- Lê os arquivos copiados no SSD e extrai metadados (EXIF e codecs de vídeo).
+- Classifica automaticamente em:
+  - 🌕 `astro_lua`: RAW `.CR2` em zoom máximo na SX60/SX50.
+  - ⏱️ `timelapse_gopro`: fotos sequenciais GoPro.
+  - 🦅 `rajada`: disparos com intervalo $\le 3\text{s}$ (pastas `rajada_HH-mm-SS`).
+  - 📷 `avulsa`: fotos isoladas (pasta `avulsas`).
+  - 🎥 `video`: vídeos das câmeras (pasta `videos`).
+- Gera o plano de renomeação completo e grava o log da etapa.
+
+### 3. Execução da Renomeação e Organização Física
+- Move os arquivos do staging para suas pastas definitivas conforme o plano gravado.
+- Aplica a nomenclatura compacto-inteligente sem pontos na abertura (`f1-8`, `f6-5`).
+- Marca cada item como organizado no plano.
+
+### 4. Upload para o Google Fotos (Economia de Armazenamento)
+- Filtra apenas as fotos normais (`avulsas` e `rajadas`), isolando astrofotografia e timelapses.
+- Otimiza as fotos para o padrão oficial de Economia de Armazenamento (Storage Saver): redimensiona proporcionalmente imagens $>16\text{MP}$ para até $16\text{MP}$ com compressão JPEG de alta qualidade, preservando metadados EXIF.
+- Faz o upload seguro via API do Google Fotos com registro de log por foto.
+
+### 5. Transferência dos Enviados para a Pasta `UPLOADED/`
+- Para cada foto cujo upload foi confirmado com sucesso, move de `Biblioteca/` para `UPLOADED/Biblioteca/ANO/MES/DIA/...`.
+- Mantém na `Biblioteca/` apenas o que ainda não foi enviado ou fotos que você preferiu manter locais.
+
+### 6. Renderização de Timelapses com `timelapse_studio.py`
+- Detecta as pastas de timelapse GoPro organizadas no projeto.
+- Aciona automaticamente o script configurado no `config.json` (`"timelapse_studio_path": "C:/code/timelapse/timelapse_studio.py"`), renderizando os timelapses em 4K.
+
+### 7. Limpeza Segura no SSD dos Arquivos Enviados
+- Cruza os logs da Etapa 4 e confirma as fotos presentes na pasta `UPLOADED/`.
+- Exibe o total de arquivos e espaço em MB/GB que será liberado no SSD.
+- Solicita confirmação explícita antes de apagar as cópias locais das fotos já salvas na nuvem.
+
 ---
 
-## 🛠️ Requisitos de Sistema
+## 💻 Como Operar o Pipeline
 
-- **Python**: 3.10 ou superior.
-- **Exiftool**: Utilitário para leitura rápida de metadados EXIF (`exiftool.exe` no PATH ou em `C:\Windows\exiftool.exe`).
-- **FFprobe**: Utilitário do pacote FFmpeg para análise técnica de vídeos (`ffprobe.exe` no PATH).
-
----
-
-## 🚀 Instalação
-
-1. Clone o repositório:
-   ```bash
-   git clone https://github.com/felipeph/fotos-backup-workflow.git
-   cd fotos-backup-workflow
-   ```
-
-2. Instale as dependências:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Crie seu arquivo de configuração local a partir do modelo:
-   ```bash
-   copy config.example.json config.json
-   ```
-   *Edite `config.json` para indicar o seu disco de destino (`destination_root`) e o seu tópico do `ntfy_topic`.*
-
----
-
-## 💻 Como Usar
-
-### Opção 1: Menu Interativo no Terminal (Recomendado)
+### Modo Interativo no Terminal (TUI)
 Dê um duplo clique no arquivo **`run_pipeline.bat`** ou execute:
 ```powershell
 python main.py
 ```
-Você verá o menu interativo:
+
+O menu interativo será exibido:
 ```text
-======================================================================
-      📸 FOTOS BACKUP WORKFLOW - RESILIENT MEDIA PIPELINE 🚀
-   Perda Zero | Astrofotografia | Timelapses | Google Fotos | Pássaros
-======================================================================
-[STATUS] Exiftool: ✅ OK | FFprobe: ✅ OK | Espaço Livre: 239 GB
-[DESTINO] D:/Fotos_Organizadas
-----------------------------------------------------------------------
- 1. 📥 Ingerir e Organizar Fotos/Vídeos (Cartão SD ou Pasta)
- 2. ☁️  Upload para o Google Fotos (Fotos da Biblioteca)
- 3. ⏱️  Compilar Timelapse da GoPro (Chamar script existente)
- 4. 📋 Visualizar Último Relatório de Auditoria
- 5. ⚙️  Ajustar Configurações (Caminhos, Notificações, Timer)
- 0. 🚪 Sair
-----------------------------------------------------------------------
+==========================================================================
+        📸 FOTOS BACKUP WORKFLOW - PIPELINE EM 7 ETAPAS 🚀
+   Projeto Ativo: [2026-09-06_sessao_01] | Status: [Etapa 2 Concluída]
+==========================================================================
+ [ENTER] 🚀 EXECUTAR TUDO (Sequencial 1 a 7 com pausas de 180s e alertas)
+--------------------------------------------------------------------------
+  1. 📥 Etapa 1: Ingestão SD -> SSD (Verificação SHA-256 e limpeza do SD)
+  2. 📝 Etapa 2: Scan dos arquivos e criação do plano (project_plan.json)
+  3. 🏷️  Etapa 3: Executar renomeação e organização física
+  4. ☁️  Etapa 4: Upload Google Fotos (Modo Economia de Armazenamento)
+  5. 📦 Etapa 5: Mover fotos enviadas para pasta UPLOADED
+  6. ⏱️  Etapa 6: Renderizar Timelapses (timelapse_studio.py)
+  7. 🧹 Etapa 7: Limpeza de fotos enviadas no SSD (Baseado no log)
+--------------------------------------------------------------------------
+  P. 📂 Selecionar / Criar Projeto
+  C. ⚙️  Configurações (Caminhos, Notificações, Timer)
+  0. 🚪 Sair
+--------------------------------------------------------------------------
 ```
 
-### Opção 2: Linha de Comando (CLI)
-- **Organizar uma pasta ou cartão SD:**
+### Modo Sequencial Automático (`[ENTER]` ou CLI `--run-all`)
+- Executa todas as etapas pendentes do projeto sequencialmente (1 a 7).
+- Dispara notificações multicanal (Toast Windows, som e push `ntfy.sh`) ao término de cada etapa.
+- Pausa com timer interativo de **180 segundos** entre cada etapa:
+  - `[ENTER]`: avança imediatamente para a próxima etapa.
+  - `[P]`: pausa para você inspecionar as fotos com calma.
+  - `[C]`: cancela a sequência.
+  - Se o tempo expirar (overnight), avança automaticamente.
+
+### Modo Linha de Comando Direta (CLI)
+- **Executar tudo de um projeto:**
   ```powershell
-  python main.py organize --source "E:\DCIM"
+  python main.py run-all --project "2026-09-06_sessao_01" --source "E:\DCIM"
   ```
-- **Executar organização com contagem regressiva para upload no Google Fotos:**
+- **Executar uma etapa específica:**
   ```powershell
-  python main.py run-all --source "E:\DCIM"
+  python main.py stage 1 --project "2026-09-06_sessao_01" --source "E:\DCIM"
+  python main.py stage 2 --project "2026-09-06_sessao_01"
+  python main.py stage 3 --project "2026-09-06_sessao_01"
+  python main.py stage 4 --project "2026-09-06_sessao_01"
+  python main.py stage 5 --project "2026-09-06_sessao_01"
+  python main.py stage 6 --project "2026-09-06_sessao_01"
+  python main.py stage 7 --project "2026-09-06_sessao_01"
   ```
-- **Upload manual de fotos pendentes da biblioteca:**
-  ```powershell
-  python main.py upload
-  ```
-- **Verificar ferramentas instaladas:**
+- **Verificar ambiente:**
   ```powershell
   python main.py preflight
   ```
@@ -156,13 +139,38 @@ Você verá o menu interativo:
 
 ## 🧪 Testes Automatizados
 
-Para executar a suíte de testes unitários:
+Para executar os testes unitários cobrindo todas as etapas e a persistência de projetos:
 ```powershell
 python -m pytest tests/ -v
 ```
 
 ---
 
-## 🔒 Segurança e Privacidade
+## ⚙️ Configurações (`config.json`)
 
-Arquivos que contenham credenciais ou dados locais (`config.json`, `credentials.json`, `token.json`, `logs/`, `reports/`) estão estritamente ignorados pelo `.gitignore` para garantir que nenhum dado pessoal ou credencial de nuvem seja commitado no repositório.
+```json
+{
+  "destination_root": "D:/Fotos_Organizadas",
+  "staging_dir": "D:/Fotos_Organizadas/staging",
+  "uploaded_dir": "D:/Fotos_Organizadas/UPLOADED",
+  "timelapse_studio_path": "C:/code/timelapse/timelapse_studio.py",
+  "burst_interval_seconds": 3.0,
+  "moon_zoom_threshold_mm": 1200.0,
+  "countdown_seconds": 180,
+  "naming": {
+    "photo_pattern": "{date}_{time}_{camera}_{focal}_{aperture}_{shutter}_{iso}_{original}.{ext}",
+    "video_pattern": "{date}_{time}_{camera}_{resolution}_{fps}_{duration}_{original}.{ext}"
+  },
+  "notifications": {
+    "toast_enabled": true,
+    "sound_enabled": true,
+    "ntfy_topic": "seu-topico-aqui"
+  },
+  "google_photos": {
+    "credentials_file": "credentials.json",
+    "token_file": "token.json",
+    "auto_upload_after_countdown": true,
+    "album_name": ""
+  }
+}
+```

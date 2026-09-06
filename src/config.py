@@ -24,7 +24,9 @@ class GooglePhotosConfig:
 @dataclass
 class PipelineConfig:
     destination_root: str = "D:/Fotos_Organizadas"
-    gopro_script_path: str = ""
+    staging_dir: str = "D:/Fotos_Organizadas/staging"
+    uploaded_dir: str = "D:/Fotos_Organizadas/UPLOADED"
+    timelapse_studio_path: str = "C:/code/timelapse/timelapse_studio.py"
     burst_interval_seconds: float = 3.0
     moon_zoom_threshold_mm: float = 1200.0
     countdown_seconds: int = 180
@@ -35,6 +37,14 @@ class PipelineConfig:
     @property
     def destination_path(self) -> Path:
         return Path(self.destination_root)
+
+    @property
+    def staging_path(self) -> Path:
+        return Path(self.staging_dir)
+
+    @property
+    def uploaded_path(self) -> Path:
+        return Path(self.uploaded_dir)
 
     @property
     def biblioteca_path(self) -> Path:
@@ -51,7 +61,11 @@ class PipelineConfig:
 def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
     path = Path(config_path)
     if not path.exists():
-        return PipelineConfig()
+        example_path = Path("config.example.json")
+        if example_path.exists():
+            path = example_path
+        else:
+            return PipelineConfig()
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -77,9 +91,16 @@ def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
             album_name=gp_data.get("album_name", GooglePhotosConfig.album_name),
         )
 
+        dest_root = data.get("destination_root", "D:/Fotos_Organizadas")
+        staging_dir = data.get("staging_dir", f"{dest_root}/staging")
+        uploaded_dir = data.get("uploaded_dir", f"{dest_root}/UPLOADED")
+        tl_path = data.get("timelapse_studio_path", data.get("gopro_script_path", "C:/code/timelapse/timelapse_studio.py"))
+
         return PipelineConfig(
-            destination_root=data.get("destination_root", "D:/Fotos_Organizadas"),
-            gopro_script_path=data.get("gopro_script_path", ""),
+            destination_root=dest_root,
+            staging_dir=staging_dir,
+            uploaded_dir=uploaded_dir,
+            timelapse_studio_path=tl_path,
             burst_interval_seconds=float(data.get("burst_interval_seconds", 3.0)),
             moon_zoom_threshold_mm=float(data.get("moon_zoom_threshold_mm", 1200.0)),
             countdown_seconds=int(data.get("countdown_seconds", 180)),
@@ -95,7 +116,9 @@ def save_config(config: PipelineConfig, config_path: Path | str = "config.json")
     path = Path(config_path)
     data = {
         "destination_root": config.destination_root,
-        "gopro_script_path": config.gopro_script_path,
+        "staging_dir": config.staging_dir,
+        "uploaded_dir": config.uploaded_dir,
+        "timelapse_studio_path": config.timelapse_studio_path,
         "burst_interval_seconds": config.burst_interval_seconds,
         "moon_zoom_threshold_mm": config.moon_zoom_threshold_mm,
         "countdown_seconds": config.countdown_seconds,

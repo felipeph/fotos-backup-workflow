@@ -1,198 +1,141 @@
 import argparse
 import sys
 import os
-import time
 from pathlib import Path
 from datetime import datetime
 
 from src.config import load_config, PipelineConfig
+from src.project import Project, list_projects, load_project, create_project
 from src.preflight import check_preflight, find_removable_drives
-from src.metadata_extractor import extract_metadata_batch, PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
-from src.classifier import classify_media_batch
-from src.storage import safe_copy_file
 from src.notifier import notify_event, countdown_prompt
-from src.google_photos import GooglePhotosManager
-from src.reporter import AuditReporter
-from src.tui import display_menu, settings_menu, clear_screen, print_banner
+from src.stages import (
+    run_stage1,
+    run_stage2,
+    run_stage3,
+    run_stage4,
+    run_stage5,
+    run_stage6,
+    run_stage7,
+)
+from src.tui import display_menu, settings_menu, project_selection_menu, clear_screen, print_banner
 
-def find_media_files(source_dir: Path) -> list[Path]:
-    valid_exts = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
-    files = []
-    for root, _, filenames in os.walk(source_dir):
-        for f in filenames:
-            if f.startswith("."):
-                continue
-            p = Path(root) / f
-            if p.suffix.lower() in valid_exts:
-                files.append(p)
-    return files
+STAGE_FUNCTIONS = {
+    1: ("Etapa 1 (Ingestão SD -> SSD)", run_stage1),
+    2: ("Etapa 2 (Criação do Plano JSON)", run_stage2),
+    3: ("Etapa 3 (Organização Física)", run_stage3),
+    4: ("Etapa 4 (Upload Google Fotos)", run_stage4),
+    5: ("Etapa 5 (Mover para UPLOADED)", run_stage5),
+    6: ("Etapa 6 (Timelapse Studio)", run_stage6),
+    7: ("Etapa 7 (Limpeza SSD)", run_stage7),
+}
 
-def run_organize(source_dir: Path, config: PipelineConfig, is_standalone: bool = True) -> bool:
-    print(f"\n🔍 [1/4] Escaneando arquivos em: {source_dir} ...")
-    media_files = find_media_files(source_dir)
-    if not media_files:
-        print(f"[AVISO] Nenhum arquivo de foto ou vídeo encontrado em {source_dir}.")
-        return False
+def execute_stage(stage_num: int, project: Project, config: PipelineConfig, **kwargs) -> bool:
+    name, fn = STAGE_FUNCTIONS[stage_num]
+    print(f"\n========================================================")
+    print(f"  ▶️  INICIANDO {name.upper()}")
+    print(f"========================================================")
 
-    print(f"📦 Total de arquivos de mídia identificados: {len(media_files)}")
-    start_time = time.time()
+    if stage_num == 1:
+        success = fn(project, config, auto_delete_sd=kwargs.get("auto_delete_sd", False))
+    elif stage_num == 7:
+        success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_cleanup", False))
+    else:
+        success = fn(project, config)
 
-    # Step 2: Metadata
-    print(f"\n📊 [2/4] Extraindo metadados EXIF e informações de mídia...")
-    metadata_list = extract_metadata_batch(media_files)
+    if success:
+        notify_event(
+            title=f"Fotos Backup - {name}",
+            message=f"Concluída com sucesso no projeto '{project.project_id}'!",
+            config=config.notifications
+        )
+    else:
+        print(f"\n⚠️  {name} encerrou com avisos ou pendências.")
 
-    # Step 3: Classification
-    print(f"\n🏷️  [3/4] Classificando em categorias e agrupando rajadas/avulsas...")
-    classified_items = classify_media_batch(metadata_list, config)
+    return success
 
-    cat_counts: dict[str, int] = {}
-    for item in classified_items:
-        cat_counts[item.category] = cat_counts.get(item.category, 0) + 1
+def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool = False):
+    print(f"\n🚀 [EXECUTAR TUDO] Iniciando pipeline sequencial para '{project.project_id}'...")
 
-    print("\n📋 Resumo da Classificação:")
-    for cat, count in cat_counts.items():
-        print(f"   - {cat}: {count} arquivos")
+    for st in range(1, 8):
+        # Skip stages already completed if resuming
+        if project.current_stage >= st:
+            print(f"ℹ️  Etapa {st} já concluída anteriormente neste projeto. Pulando...")
+            continue
 
-    # Step 4: Secure Transfer
-    print(f"\n💾 [4/4] Copiando arquivos com verificação SHA-256 para {config.destination_root}...")
-    transfer_results = []
-    dest_root = config.destination_path
+        name, _ = STAGE_FUNCTIONS[st]
+        ok = execute_stage(st, project, config, auto_delete_sd=auto_confirm, auto_confirm_cleanup=auto_confirm)
+        if not ok and st in (1, 2, 3):
+            print(f"\n🛑 Interrompendo sequência pois a {name} não foi concluída.")
+            return
 
-    total = len(classified_items)
-    for idx, item in enumerate(classified_items, start=1):
-        target_dir = dest_root / item.relative_dest_dir
-        res = safe_copy_file(item.metadata.file_path, target_dir, item.target_filename)
-        transfer_results.append(res)
+        # Countdown pause of 180s between stages (except after final stage 7)
+        if st < 7:
+            next_name, _ = STAGE_FUNCTIONS[st + 1]
+            act = countdown_prompt(f"Avançar para {next_name}", timeout_seconds=config.countdown_seconds)
+            if act == "cancel":
+                print("\n🛑 Sequência interrompida pelo usuário.")
+                return
 
-        status_icon = "✅" if res.status == "copied" else ("⏭️" if res.status == "skipped_duplicate" else "❌")
-        sys.stdout.write(f"\r[{idx}/{total}] {status_icon} {item.target_filename[:45]:<45}")
-        sys.stdout.flush()
-
-    duration = time.time() - start_time
-    print(f"\n\n✨ Transferência concluída em {duration:.1f} segundos!")
-
-    # Step 5: Report & Notifications
-    reporter = AuditReporter(Path("."))
-    report_file = reporter.generate_report(source_dir, dest_root, classified_items, transfer_results, duration)
-    print(f"📋 Relatório de auditoria gerado: {report_file}")
-
-    copied_count = sum(1 for r in transfer_results if r.status == "copied")
-    skipped_count = sum(1 for r in transfer_results if r.status == "skipped_duplicate")
-
-    notify_event(
-        title="Fotos Backup Workflow",
-        message=f"Lote concluído! {copied_count} novos copiados, {skipped_count} duplicados pulados.",
-        config=config.notifications
-    )
-
-    return True
-
-def run_upload(config: PipelineConfig):
-    gp_mgr = GooglePhotosManager(config.google_photos, config.biblioteca_path)
-    gp_mgr.upload_pending_in_biblioteca(config.biblioteca_path)
-    notify_event(
-        title="Google Fotos",
-        message="Sincronização da biblioteca concluída!",
-        config=config.notifications
-    )
+    print(f"\n🎉 [SUCESSO TOTAL] Todas as 7 etapas do projeto '{project.project_id}' foram executadas!")
 
 def interactive_loop():
     config = load_config()
 
+    # Auto-load latest project if available
+    projs = list_projects()
+    active_project: Project | None = load_project(projs[0]) if projs else None
+
     while True:
         clear_screen()
-        choice = display_menu(config)
+        choice = display_menu(config, active_project)
 
         if choice == "0":
             print("\n👋 Encerrando. Até logo!")
             break
 
-        elif choice == "1":
-            clear_screen()
-            print_banner()
-            print("📥 INGESTÃO E ORGANIZAÇÃO DE FOTOS/VÍDEOS\n")
-            
-            drives = find_removable_drives()
-            if drives:
-                print(f"Cartões de memória detectados: {', '.join(drives)}")
-                print(f"Sugestão: {drives[0]}DCIM")
+        elif choice.upper() == "P":
+            active_project = project_selection_menu(active_project)
 
-            src_input = input("\nInforme a pasta de origem (ex: E:\\DCIM ou C:\\Fotos_Inbox): ").strip()
-            if not src_input:
-                continue
-
-            source_path = Path(src_input)
-            if not source_path.exists():
-                print(f"❌ Caminho não existe: {source_path}")
-                input("Pressione ENTER para voltar...")
-                continue
-
-            success = run_organize(source_path, config)
-            if success and config.google_photos.auto_upload_after_countdown:
-                next_action = countdown_prompt("Upload para o Google Fotos", timeout_seconds=config.countdown_seconds)
-                if next_action in ("advance", "timeout"):
-                    run_upload(config)
-
-            input("\nPressione ENTER para voltar ao menu...")
-
-        elif choice == "2":
-            clear_screen()
-            print_banner()
-            print("☁️ UPLOAD PARA O GOOGLE FOTOS\n")
-            run_upload(config)
-            input("\nPressione ENTER para voltar ao menu...")
-
-        elif choice == "3":
-            clear_screen()
-            print_banner()
-            print("⏱️ COMPILAR TIMELAPSE DA GOPRO\n")
-            if config.gopro_script_path and Path(config.gopro_script_path).exists():
-                print(f"Executando script: {config.gopro_script_path} ...")
-                os.system(f'python "{config.gopro_script_path}"')
-            else:
-                print("Nenhum script de timelapse configurado no config.json.")
-                script_path = input("Informe o caminho do script (.py ou .bat): ").strip()
-                if script_path and Path(script_path).exists():
-                    config.gopro_script_path = script_path
-                    from src.config import save_config
-                    save_config(config)
-                    os.system(f'python "{script_path}"')
-            input("\nPressione ENTER para voltar ao menu...")
-
-        elif choice == "4":
-            clear_screen()
-            print_banner()
-            print("📋 ÚLTIMO RELATÓRIO DE AUDITORIA\n")
-            rep_dir = Path("reports")
-            if rep_dir.exists():
-                reports = sorted(rep_dir.glob("audit_report_*.md"), reverse=True)
-                if reports:
-                    latest = reports[0]
-                    print(f"Arquivo: {latest.name}\n")
-                    print(latest.read_text(encoding="utf-8"))
-                else:
-                    print("Nenhum relatório encontrado ainda.")
-            else:
-                print("Pasta de relatórios não existe.")
-            input("\nPressione ENTER para voltar ao menu...")
-
-        elif choice == "5":
+        elif choice.upper() == "C":
             settings_menu(config)
 
+        elif choice == "" or choice.upper() == "A":
+            # ENTER or A: RUN ALL
+            if not active_project:
+                active_project = project_selection_menu(active_project)
+                if not active_project:
+                    continue
+            clear_screen()
+            run_all_stages(active_project, config)
+            input("\nPressione ENTER para voltar ao menu...")
+
+        elif choice in [str(i) for i in range(1, 8)]:
+            st = int(choice)
+            if not active_project:
+                print("\nℹ️  Nenhum projeto selecionado. Crie ou selecione um projeto primeiro.")
+                active_project = project_selection_menu(active_project)
+                if not active_project:
+                    continue
+
+            clear_screen()
+            execute_stage(st, active_project, config)
+            input("\nPressione ENTER para voltar ao menu...")
+
 def main():
-    parser = argparse.ArgumentParser(description="Fotos Backup Workflow - Resilient Media Pipeline")
+    parser = argparse.ArgumentParser(description="Fotos Backup Workflow - Pipeline em 7 Etapas por Projeto")
     subparsers = parser.add_subparsers(dest="command", help="Comandos disponíveis")
 
-    # Command: organize
-    org_parser = subparsers.add_parser("organize", help="Ingere, classifica, renomeia e copia fotos/vídeos")
-    org_parser.add_argument("--source", "-s", required=True, help="Pasta de origem (ex: E:\\DCIM)")
-
-    # Command: upload
-    subparsers.add_parser("upload", help="Envia fotos pendentes da biblioteca para o Google Fotos")
-
     # Command: run-all
-    all_parser = subparsers.add_parser("run-all", help="Executa organização e upload com contagem regressiva")
-    all_parser.add_argument("--source", "-s", required=True, help="Pasta de origem (ex: E:\\DCIM)")
+    all_p = subparsers.add_parser("run-all", help="Executa as 7 etapas sequencialmente")
+    all_p.add_argument("--project", "-p", help="Nome do projeto (cria novo se não existir)")
+    all_p.add_argument("--source", "-s", help="Pasta de origem dos arquivos brutos")
+    all_p.add_argument("--yes", "-y", action="store_true", help="Confirma automaticamente remoções do SD e SSD")
+
+    # Command: stage
+    st_p = subparsers.add_parser("stage", help="Executa uma etapa específica (1 a 7)")
+    st_p.add_argument("number", type=int, choices=range(1, 8), help="Número da etapa (1 a 7)")
+    st_p.add_argument("--project", "-p", required=True, help="Nome do projeto")
+    st_p.add_argument("--source", "-s", help="Pasta de origem (necessária na etapa 1)")
 
     # Command: preflight
     subparsers.add_parser("preflight", help="Verifica integridade do ambiente e ferramentas")
@@ -204,21 +147,26 @@ def main():
         interactive_loop()
     elif args.command == "preflight":
         pf = check_preflight(config.destination_root)
-        print(f"Python OK: {pf.python_ok} ({pf.python_version})")
-        print(f"Exiftool: {pf.exiftool_path} ({'OK' if pf.exiftool_ok else 'NÃO ENCONTRADO'})")
-        print(f"FFprobe: {pf.ffprobe_path} ({'OK' if pf.ffprobe_ok else 'NÃO ENCONTRADO'})")
+        print(f"Python: {pf.python_version} ({'OK' if pf.python_ok else 'Desatualizado'})")
+        print(f"Exiftool: {pf.exiftool_path}")
+        print(f"FFprobe: {pf.ffprobe_path}")
         print(f"Destino Gravável: {pf.destination_writable} ({pf.free_disk_space_gb} GB livres)")
         print(f"Cartões Detectados: {pf.removable_drives}")
-    elif args.command == "organize":
-        run_organize(Path(args.source), config)
-    elif args.command == "upload":
-        run_upload(config)
+    elif args.command == "stage":
+        proj = load_project(args.project)
+        if not proj:
+            if not args.source:
+                print(f"[ERRO] Projeto '{args.project}' não existe. Forneça --source para criá-lo.")
+                return
+            proj = create_project(args.project, args.source)
+        execute_stage(args.number, proj, config)
     elif args.command == "run-all":
-        success = run_organize(Path(args.source), config)
-        if success:
-            action = countdown_prompt("Upload para Google Fotos", timeout_seconds=config.countdown_seconds)
-            if action in ("advance", "timeout"):
-                run_upload(config)
+        p_name = args.project or datetime.now().strftime("%Y-%m-%d_sessao_%H%M%S")
+        proj = load_project(p_name)
+        if not proj:
+            src = args.source or "E:\\DCIM"
+            proj = create_project(p_name, src)
+        run_all_stages(proj, config, auto_confirm=args.yes)
 
 if __name__ == "__main__":
     main()
