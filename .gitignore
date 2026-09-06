@@ -1,0 +1,28 @@
+# Configurações locais e dados pessoais
+config.json
+credentials.json
+token.json
+*.token
+.uploaded_manifest.json
+.env
+.env.*
+
+# Logs e Relatórios
+logs/
+reports/
+*.log
+
+# Cache do Python e testes
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema Operacional
+Thumbs.db
+desktop.ini
+.DS_Store

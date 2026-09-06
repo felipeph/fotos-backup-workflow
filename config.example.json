@@ -1,0 +1,22 @@
+{
+  "destination_root": "D:/Fotos_Organizadas",
+  "gopro_script_path": "",
+  "burst_interval_seconds": 3.0,
+  "moon_zoom_threshold_mm": 1200.0,
+  "countdown_seconds": 180,
+  "naming": {
+    "photo_pattern": "{date}_{time}_{camera}_{focal}_{aperture}_{shutter}_{iso}_{original}.{ext}",
+    "video_pattern": "{date}_{time}_{camera}_{resolution}_{fps}_{duration}_{original}.{ext}"
+  },
+  "notifications": {
+    "toast_enabled": true,
+    "sound_enabled": true,
+    "ntfy_topic": "seu-topico-aqui"
+  },
+  "google_photos": {
+    "credentials_file": "credentials.json",
+    "token_file": "token.json",
+    "auto_upload_after_countdown": true,
+    "album_name": ""
+  }
+}
