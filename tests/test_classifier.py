@@ -4,7 +4,7 @@ from src.metadata_extractor import MediaMetadata
 from src.classifier import classify_media_batch
 from src.config import PipelineConfig
 
-def create_mock_photo(name: str, ts: datetime, cam: str = "SX60", focal: float = 50.0, is_raw: bool = False, ext: str = "JPG"):
+def create_mock_photo(name: str, ts: datetime, cam: str = "SX60", focal: float = 50.0, is_raw: bool = False, ext: str = "JPG", make: str = "Cam"):
     return MediaMetadata(
         file_path=Path(name),
         is_video=False,
@@ -12,6 +12,7 @@ def create_mock_photo(name: str, ts: datetime, cam: str = "SX60", focal: float =
         time_str=ts.strftime("%H-%M-%S"),
         timestamp=ts,
         camera_model=cam,
+        camera_make=make,
         focal_length_equiv=focal,
         focal_str=f"{int(focal)}mm",
         aperture_str="f4",
@@ -71,6 +72,20 @@ def test_classifier_gopro_timelapse():
 
     p1 = create_mock_photo("GOPR001.JPG", base_t, cam="GoPro")
     p2 = create_mock_photo("GOPR002.JPG", base_t + timedelta(seconds=5), cam="GoPro")
+
+    classified = classify_media_batch([p1, p2], config)
+    assert len(classified) == 2
+    for item in classified:
+        assert item.category == "timelapse_gopro"
+        assert "Timelapses" in str(item.relative_dest_dir)
+        assert "GoPro" in str(item.relative_dest_dir)
+
+def test_classifier_gopro_hero5_generic():
+    base_t = datetime(2026, 9, 6, 8, 0, 0)
+    config = PipelineConfig()
+
+    p1 = create_mock_photo("G0016773.JPG", base_t, cam="HERO5-Black", make="GoPro")
+    p2 = create_mock_photo("G0016774.JPG", base_t + timedelta(seconds=5), cam="HERO5-Black", make="GoPro")
 
     classified = classify_media_batch([p1, p2], config)
     assert len(classified) == 2

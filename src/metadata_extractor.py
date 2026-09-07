@@ -19,7 +19,7 @@ class MediaMetadata:
     date_str: str          # YYYY-MM-DD
     time_str: str          # HH-mm-SS
     timestamp: datetime
-    camera_model: str      # e.g. "SX60", "SX50", "T6", "GoPro", "Camera"
+    camera_model: str      # e.g. "HERO5-Black", "SX60", "PowerShot-SX60-HS"
     focal_length_equiv: float # e.g. 1365.0, 50.0
     focal_str: str         # e.g. "1365mm"
     aperture_str: str      # e.g. "f6.5"
@@ -31,25 +31,39 @@ class MediaMetadata:
     original_stem: str     # e.g. "IMG_1234"
     extension: str         # e.g. "JPG"
     is_raw: bool
+    camera_make: str = "Cam" # e.g. "GoPro", "Canon", "Sony"
+
+def parse_camera_generic(raw_make: str, raw_model: str) -> tuple[str, str, str]:
+    """
+    Separa e normaliza fabricante (Make) e modelo (Model) de forma totalmente genérica.
+    Retorna: (clean_make, clean_model, combined_camera)
+    """
+    # 1. Pega o primeiro termo do Make (ignora sufixos corporativos como CORP, INC, etc.)
+    make = (raw_make or "").split()[0].strip() if raw_make else "Cam"
+    model = (raw_model or "").strip() or make
+
+    # 2. Se o modelo já começa com a marca (case-insensitive), remove para não duplicar
+    if make.lower() != "cam" and model.lower().startswith(make.lower()):
+        model = model[len(make):].strip(" -_")
+
+    # 3. Sanitiza ambos para caracteres seguros de arquivo
+    clean_make = re.sub(r"[^\w\-]+", "", make) or "Cam"
+    clean_model = re.sub(r"[^\w\-]+", "-", model).strip("-_") or clean_make
+    clean_model = re.sub(r"-+", "-", clean_model)
+
+    # 4. Representação combinada para retrocompatibilidade
+    if clean_make.lower() == clean_model.lower():
+        combined = clean_make
+    elif clean_make.lower() in clean_model.lower():
+        combined = clean_model
+    else:
+        combined = f"{clean_make}_{clean_model}"
+
+    return clean_make, clean_model, combined
 
 def sanitize_camera_name(raw_model: str) -> str:
-    if not raw_model:
-        return "Cam"
-    raw_upper = raw_model.upper()
-    if "SX60" in raw_upper:
-        return "SX60"
-    elif "SX50" in raw_upper:
-        return "SX50"
-    elif "REBEL T6" in raw_upper or "1300D" in raw_upper:
-        return "T6"
-    elif "GOPRO" in raw_upper or "HERO" in raw_upper:
-        return "GoPro"
-    elif "CANON" in raw_upper:
-        return "Canon"
-    
-    # Generic cleanup
-    clean = re.sub(r"[^A-Za-z0-9]", "", raw_model)
-    return clean[:8] if clean else "Cam"
+    _, model, _ = parse_camera_generic("", raw_model)
+    return model
 
 def format_shutter(exposure_time) -> str:
     if exposure_time is None:
@@ -85,10 +99,11 @@ def format_focal(focal_35mm, focal_real) -> tuple[float, str]:
     if target is None:
         return 0.0, "0mm"
     try:
-        val = float(target)
+        clean_num = re.sub(r"[^\d.]", "", str(target))
+        val = float(clean_num) if clean_num else 0.0
         return val, f"{round(val)}mm"
     except (ValueError, TypeError):
-        return 0.0, f"{target}mm"
+        return 0.0, "0mm"
 
 def format_duration(seconds: float | None) -> str:
     if seconds is None or seconds <= 0:
@@ -195,7 +210,9 @@ def extract_metadata_batch(
         time_str = dt.strftime("%H-%M-%S")
 
         # Camera
-        model = sanitize_camera_name(raw_exif.get("Model") or raw_exif.get("Make") or "")
+        raw_make = raw_exif.get("Make") or ""
+        raw_model = raw_exif.get("Model") or ""
+        cam_make, cam_model, _ = parse_camera_generic(raw_make, raw_model)
 
         # Focal
         focal_val, focal_str = format_focal(
@@ -266,7 +283,8 @@ def extract_metadata_batch(
             date_str=date_str,
             time_str=time_str,
             timestamp=dt,
-            camera_model=model,
+            camera_model=cam_model,
+            camera_make=cam_make,
             focal_length_equiv=focal_val,
             focal_str=focal_str,
             aperture_str=aperture_str,

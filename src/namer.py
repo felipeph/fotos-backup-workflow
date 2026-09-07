@@ -6,6 +6,8 @@ from src.config import NamingConfig
 def sanitize_filename(name: str) -> str:
     # Replace illegal Windows filename chars and dots with hyphen
     clean = re.sub(r'[\\/*?:"<>|.]', "-", name)
+    # Replace any spaces with hyphen
+    clean = re.sub(r"\s+", "-", clean)
     # Remove multiple consecutive underscores or hyphens
     clean = re.sub(r"_+", "_", clean)
     clean = re.sub(r"-+", "-", clean)
@@ -18,12 +20,23 @@ def generate_target_filename(meta: MediaMetadata, config: NamingConfig | None = 
 
     original_clean = re.sub(r"[^A-Za-z0-9_-]", "", meta.original_stem)
 
+    make = getattr(meta, "camera_make", "Cam") or "Cam"
+    model = meta.camera_model or "Cam"
+    if make == "Cam" or make.lower() == model.lower() or make.lower() in model.lower():
+        camera_str = model
+    else:
+        camera_str = f"{make}_{model}"
+
     if meta.is_video:
         pattern = config.video_pattern
         res = pattern.format(
             date=meta.date_str,
             time=meta.time_str,
-            camera=meta.camera_model,
+            camera=camera_str,
+            make=make,
+            model=model,
+            camera_make=make,
+            camera_model=model,
             resolution=meta.resolution_str or "1080p",
             fps=meta.fps_str or "30fps",
             duration=meta.duration_str or "00s",
@@ -36,7 +49,11 @@ def generate_target_filename(meta: MediaMetadata, config: NamingConfig | None = 
         res = pattern.format(
             date=meta.date_str,
             time=meta.time_str,
-            camera=meta.camera_model,
+            camera=camera_str,
+            make=make,
+            model=model,
+            camera_make=make,
+            camera_model=model,
             focal=meta.focal_str or "",
             aperture=meta.aperture_str or "",
             shutter=meta.shutter_str or "",

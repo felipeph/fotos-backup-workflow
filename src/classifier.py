@@ -33,10 +33,10 @@ def classify_media_batch(items: list[MediaMetadata], config: PipelineConfig) -> 
 
     for item in sorted_items:
         # 1. Astro Moon
-        if item.is_raw and (item.camera_model in ("SX60", "SX50") or item.focal_length_equiv >= config.moon_zoom_threshold_mm):
+        if item.is_raw and (item.focal_length_equiv >= config.moon_zoom_threshold_mm or "sx60" in item.camera_model.lower() or "sx50" in item.camera_model.lower()):
             astro_items.append(item)
         # 2. GoPro Photos
-        elif not item.is_video and item.camera_model == "GoPro":
+        elif not item.is_video and (getattr(item, "camera_make", "").lower() == "gopro" or "gopro" in item.camera_model.lower()):
             gopro_timelapse_items.append(item)
         # 3. Video
         elif item.is_video:

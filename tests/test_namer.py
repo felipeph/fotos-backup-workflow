@@ -76,3 +76,28 @@ def test_generate_video_filename():
     )
     res = generate_target_filename(meta)
     assert res == "2026-09-06_15-10-00_SX60_1080p_60fps_01m45s_MVI_9822.mp4"
+
+def test_generate_photo_filename_gopro_hero5():
+    meta = MediaMetadata(
+        file_path=Path("G0016773.JPG"),
+        is_video=False,
+        date_str="2026-09-06",
+        time_str="16-06-24",
+        timestamp=datetime(2026, 9, 6, 16, 6, 24),
+        camera_model="HERO5-Black",
+        camera_make="GoPro",
+        focal_length_equiv=17.0,
+        focal_str="17mm",
+        aperture_str="f2-8",
+        shutter_str="1-2283s",
+        iso_str="ISO100",
+        resolution_str="12MP",
+        fps_str="",
+        duration_str="",
+        original_stem="G0016773",
+        extension="JPG",
+        is_raw=False,
+    )
+    res = generate_target_filename(meta)
+    # Checks that spaces and mmmm are not present, and both make and model appear cleanly
+    assert res == "2026-09-06_16-06-24_GoPro_HERO5-Black_17mm_f2-8_1-2283s_ISO100_G0016773.jpg"
