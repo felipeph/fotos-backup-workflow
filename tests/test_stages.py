@@ -49,11 +49,13 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
         ssd_root = root / "ssd"
         ssd_root.mkdir()
 
-        # Create 2 sample photos on SD card
+        # Create 2 sample photos and 1 video on SD card
         f1 = sd_card / "IMG_0001.JPG"
         f1.write_bytes(b"content_photo_1")
         f2 = sd_card / "IMG_0002.JPG"
         f2.write_bytes(b"content_photo_2")
+        v1 = sd_card / "MVI_0001.MP4"
+        v1.write_bytes(b"content_video_1")
 
         cfg = PipelineConfig(
             destination_root=str(ssd_root),
@@ -71,10 +73,11 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
             ok1 = run_stage1(proj, cfg, auto_delete_sd=True)
             assert ok1 is True
             assert proj.current_stage == 1
-            assert len(proj.items) == 2
+            assert len(proj.items) == 3
             # SD files should be erased now
             assert not f1.exists()
             assert not f2.exists()
+            assert not v1.exists()
             # Staging files should exist
             assert Path(proj.items[0].staging_path).exists()
 
@@ -83,12 +86,16 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
             assert ok2 is True
             assert proj.current_stage == 2
             assert proj.items[0].target_filename != ""
+            video_items = [it for it in proj.items if it.category == "video"]
+            assert len(video_items) == 1
+            assert "videos" in video_items[0].relative_dest_dir
 
             # --- ETAPA 3: Organização Física ---
             ok3 = run_stage3(proj, cfg)
             assert ok3 is True
             assert proj.current_stage == 3
             assert Path(proj.items[0].organized_path).exists()
+            assert Path(video_items[0].organized_path).exists()
 
             # --- ETAPA 4: Teste de Recusa (ainda não subiu) ---
             monkeypatch.setattr("builtins.input", lambda prompt="": "n")
@@ -96,6 +103,7 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
             assert ok4_declined is False
             assert proj.current_stage == 3
             assert proj.items[0].uploaded_at == ""
+            assert video_items[0].uploaded_at == ""
 
             # --- ETAPA 4: Teste de Confirmação (upload web feito) ---
             ok4_confirmed = run_stage4(proj, cfg, auto_confirm=True)
@@ -103,6 +111,7 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
             assert proj.current_stage == 4
             assert proj.items[0].uploaded_at != ""
             assert proj.items[1].uploaded_at != ""
+            assert video_items[0].uploaded_at != ""
 
             # --- ETAPA 5: Transferência para UPLOADED ---
             ok5 = run_stage5(proj, cfg)
@@ -110,12 +119,16 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
             assert proj.current_stage == 5
             assert Path(proj.items[0].uploaded_path).exists()
             assert "UPLOADED" in proj.items[0].uploaded_path
+            assert Path(video_items[0].uploaded_path).exists()
+            assert "UPLOADED" in video_items[0].uploaded_path
+            assert "videos" in video_items[0].uploaded_path
 
             # --- ETAPA 7: Limpeza pós-upload no SSD ---
             ok7 = run_stage7(proj, cfg, auto_confirm=True)
             assert ok7 is True
             assert proj.current_stage == 7
             assert not Path(proj.items[0].uploaded_path).exists()
+            assert not Path(video_items[0].uploaded_path).exists()
 
         finally:
             src.project.PROJECTS_DIR = old_dir
@@ -179,5 +192,77 @@ def test_stage1_concurrent_ingestion_and_resume(monkeypatch):
             # Now SD files should have been deleted
             for f in sd_card.glob("*.JPG"):
                 assert False, f"File {f} was not deleted from SD"
+        finally:
+            src.project.PROJECTS_DIR = old_dir
+
+def test_video_upload_confirmation_and_transfer_to_uploaded():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        ssd_root = root / "ssd"
+        dest_bib = ssd_root / "Biblioteca" / "2026" / "08" / "08" / "videos"
+        dest_bib.mkdir(parents=True)
+        vid_file = dest_bib / "2026-08-08_test_video.mp4"
+        vid_file.write_bytes(b"dummy_video_bytes_12345")
+
+        cfg = PipelineConfig(
+            destination_root=str(ssd_root),
+            staging_dir=str(ssd_root / "staging"),
+            uploaded_dir=str(ssd_root / "UPLOADED"),
+        )
+
+        import src.project
+        old_dir = src.project.PROJECTS_DIR
+        src.project.PROJECTS_DIR = root / "projects"
+        try:
+            proj = create_project("test_video_session", str(root / "source"))
+            proj.current_stage = 3
+
+            # Add an already uploaded photo
+            proj.items.append(ProjectItem(
+                original_path="photo1.jpg",
+                sha256="hash1",
+                file_size_bytes=100,
+                category="avulsa",
+                relative_dest_dir="Biblioteca/2026/08/08/avulsas",
+                target_filename="photo1.jpg",
+                organized_path=str(ssd_root / "Biblioteca" / "2026" / "08" / "08" / "avulsas" / "photo1.jpg"),
+                uploaded_at="2026-09-07T08:00:00",
+                uploaded_path=str(ssd_root / "UPLOADED" / "Biblioteca" / "2026" / "08" / "08" / "avulsas" / "photo1.jpg"),
+            ))
+
+            # Add a video that was organized but not yet marked uploaded
+            vid_item = ProjectItem(
+                original_path="test_video.mp4",
+                sha256="hash2",
+                file_size_bytes=len(b"dummy_video_bytes_12345"),
+                category="video",
+                relative_dest_dir="Biblioteca/2026/08/08/videos",
+                target_filename="2026-08-08_test_video.mp4",
+                organized_path=str(vid_file.resolve()),
+                uploaded_at="",
+                uploaded_path="",
+            )
+            proj.items.append(vid_item)
+            proj.save()
+
+            # Run Stage 4: should identify the pending video and mark it uploaded
+            ok4 = run_stage4(proj, cfg, auto_confirm=True)
+            assert ok4 is True
+            assert vid_item.uploaded_at != ""
+
+            # Run Stage 5: should move the video to UPLOADED
+            ok5 = run_stage5(proj, cfg)
+            assert ok5 is True
+            assert vid_item.uploaded_path != ""
+            assert Path(vid_item.uploaded_path).exists()
+            assert "UPLOADED" in vid_item.uploaded_path
+            assert "videos" in vid_item.uploaded_path
+            assert not vid_file.exists()
+
+            # Run Stage 7: should clean up the video from UPLOADED
+            ok7 = run_stage7(proj, cfg, auto_confirm=True)
+            assert ok7 is True
+            assert vid_item.cleaned_at != ""
+            assert not Path(vid_item.uploaded_path).exists()
         finally:
             src.project.PROJECTS_DIR = old_dir

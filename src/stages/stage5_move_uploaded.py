@@ -23,7 +23,7 @@ def run_stage5(project: Project, config: PipelineConfig) -> bool:
     ]
 
     if not uploaded_candidates:
-        console.print("\n[yellow]ℹ️  [ETAPA 5] Nenhuma foto pendente de transferência para a pasta UPLOADED.[/yellow]")
+        console.print("\n[yellow]ℹ️  [ETAPA 5] Nenhum arquivo pendente de transferência para a pasta UPLOADED.[/yellow]")
         project.current_stage = max(project.current_stage, 5)
         project.save()
         return True

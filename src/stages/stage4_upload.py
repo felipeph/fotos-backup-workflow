@@ -17,7 +17,7 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     1. Aponta as fotos e pastas prontas na Biblioteca do SSD.
     2. Dá a opção de abrir a pasta no Explorer para arrastar para photos.google.com.
     3. Pergunta se o upload foi concluído com sucesso.
-    4. Ao confirmar, grava o timestamp de 'uploaded_at' de cada foto no project_plan.json.
+    4. Ao confirmar, grava o timestamp de 'uploaded_at' de cada arquivo no project_plan.json.
     """
     if project.current_stage < 3 or not project.items:
         print("[ERRO] Arquivos ainda não foram organizados. Execute a Etapa 3 primeiro.")
@@ -25,11 +25,11 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
 
     upload_candidates = [
         it for it in project.items
-        if it.category in ("rajada", "avulsa") and not it.uploaded_at
+        if it.category in ("rajada", "avulsa", "video") and not it.uploaded_at
     ]
 
     if not upload_candidates:
-        print("\nℹ️  [ETAPA 4] Nenhuma foto normal pendente de upload no projeto.")
+        print("\nℹ️  [ETAPA 4] Nenhum arquivo (foto ou vídeo) pendente de upload no projeto.")
         project.current_stage = max(project.current_stage, 4)
         project.save()
         return True
@@ -49,7 +49,7 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
             if open_folder in ("s", "sim", "y", "yes"):
                 os.startfile(str(bib_path))
 
-        ans = input(f"\n❓ O upload das {total} fotos foi concluído com sucesso no Google Fotos? [S/N]: ").strip().lower()
+        ans = input(f"\n❓ O upload dos {total} arquivos (fotos e vídeos) foi concluído com sucesso no Google Fotos? [S/N]: ").strip().lower()
         if ans in ("s", "sim", "y", "yes"):
             confirmed = True
         else:
@@ -65,7 +65,7 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
 
     with open(log_file, "a", encoding="utf-8") as log:
         log.write(f"=== ETAPA 4 (CONFIRMAÇÃO DE UPLOAD WEB): {now_iso} ===\n")
-        log.write(f"Total de fotos confirmadas: {total}\n")
+        log.write(f"Total de arquivos confirmados: {total}\n")
 
         for idx, it in enumerate(upload_candidates, start=1):
             it.uploaded_at = now_iso
@@ -75,6 +75,6 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     project.save()
 
     print_stage_summary("Etapa 4 (Confirmação Upload Web)", start_time, success=True, items_done=total)
-    console.print(f"✅ [bold green]Sucesso![/bold green] {total} fotos marcadas como enviadas no project_plan.json.")
-    console.print("As fotos confirmadas agora estão prontas para a Etapa 5 (Mover para UPLOADED/).\n")
+    console.print(f"✅ [bold green]Sucesso![/bold green] {total} arquivos (fotos e vídeos) marcados como enviados no project_plan.json.")
+    console.print("Os arquivos confirmados agora estão prontos para a Etapa 5 (Mover para UPLOADED/).\n")
     return True

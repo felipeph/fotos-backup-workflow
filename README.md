@@ -57,23 +57,23 @@ Cada lote de fotos/vídeos é gerenciado como um **Projeto/Sessão** independent
 - Marca cada item como organizado no plano.
 
 ### 4. Confirmação de Upload no Google Fotos Web (Storage Saver)
-- Filtra apenas as fotos normais (`avulsas` e `rajadas`), isolando astrofotografia e timelapses.
+- Filtra apenas as mídias da biblioteca (`avulsas`, `rajadas` e `vídeos`), isolando astrofotografia e timelapses.
 - Exibe o caminho local da pasta no SSD e oferece a abertura direta no Explorador de Arquivos para você arrastar para o [Google Fotos Web](https://photos.google.com).
 - Ao realizar o upload no navegador, o Google Fotos aplica nativamente o modo **Economia de Armazenamento** (Storage Saver) sem necessidade de credenciais complexas de API ou OAuth.
 - Pergunta ao usuário se o upload foi concluído com sucesso e grava o status `uploaded_at` no `project_plan.json`.
 
 ### 5. Transferência dos Enviados para a Pasta `UPLOADED/`
-- Para cada foto cujo upload foi confirmado com sucesso, move de `Biblioteca/` para `UPLOADED/Biblioteca/ANO/MES/DIA/...`.
-- Mantém na `Biblioteca/` apenas o que ainda não foi enviado ou fotos que você preferiu manter locais.
+- Para cada arquivo (foto ou vídeo) cujo upload foi confirmado com sucesso, move de `Biblioteca/` para `UPLOADED/Biblioteca/ANO/MES/DIA/...`.
+- Mantém na `Biblioteca/` apenas o que ainda não foi enviado ou mídias que você preferiu manter locais.
 
 ### 6. Renderização de Timelapses com `timelapse_studio.py`
 - Detecta as pastas de timelapse GoPro organizadas no projeto.
 - Aciona automaticamente o script configurado no `config.json` (`"timelapse_studio_path": "C:/code/timelapse/timelapse_studio.py"`), renderizando os timelapses em 4K.
 
 ### 7. Limpeza Segura no SSD dos Arquivos Enviados
-- Cruza os logs da Etapa 4 e confirma as fotos presentes na pasta `UPLOADED/`.
+- Cruza os logs da Etapa 4 e confirma os arquivos (fotos e vídeos) presentes na pasta `UPLOADED/`.
 - Exibe o total de arquivos e espaço em MB/GB que será liberado no SSD.
-- Solicita confirmação explícita antes de apagar as cópias locais das fotos já salvas na nuvem.
+- Solicita confirmação explícita antes de apagar as cópias locais das mídias já salvas na nuvem.
 
 ---
 
