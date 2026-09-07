@@ -80,6 +80,21 @@ def find_timelapse_segments(photos: list[MediaMetadata], config: PipelineConfig)
 def _classify_bursts_and_singles(photos: list[MediaMetadata], config: PipelineConfig, classified: list[ClassifiedItem]):
     if not photos:
         return
+
+    # Se a detecção de rajadas estiver desativada (padrão), organiza fotos diretamente por dia
+    if not config.enable_burst_detection:
+        for it in photos:
+            y, m, d = it.date_str.split("-")
+            bdir = Path("Biblioteca") / y / m / d
+            target_name = generate_target_filename(it, config.naming)
+            classified.append(ClassifiedItem(
+                metadata=it,
+                category="avulsa",
+                relative_dest_dir=bdir,
+                target_filename=target_name,
+            ))
+        return
+
     current_burst = [photos[0]]
     burst_groups = [current_burst]
 

@@ -23,6 +23,7 @@ class PipelineConfig:
     timelapse_min_photos: int = 500
     timelapse_max_interval_seconds: float = 120.0
     timelapse_tolerance_ratio: float = 0.3
+    enable_burst_detection: bool = False
     burst_interval_seconds: float = 3.0
     moon_zoom_threshold_mm: float = 1200.0
     countdown_seconds: int = 180
@@ -94,6 +95,7 @@ def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
             timelapse_min_photos=int(data.get("timelapse_min_photos", 500)),
             timelapse_max_interval_seconds=float(data.get("timelapse_max_interval_seconds", 120.0)),
             timelapse_tolerance_ratio=float(data.get("timelapse_tolerance_ratio", 0.3)),
+            enable_burst_detection=bool(data.get("enable_burst_detection", False)),
             burst_interval_seconds=float(data.get("burst_interval_seconds", 3.0)),
             moon_zoom_threshold_mm=float(data.get("moon_zoom_threshold_mm", 1200.0)),
             countdown_seconds=int(data.get("countdown_seconds", 180)),
@@ -117,6 +119,7 @@ def save_config(config: PipelineConfig, config_path: Path | str = "config.json")
         "timelapse_min_photos": config.timelapse_min_photos,
         "timelapse_max_interval_seconds": config.timelapse_max_interval_seconds,
         "timelapse_tolerance_ratio": config.timelapse_tolerance_ratio,
+        "enable_burst_detection": config.enable_burst_detection,
         "burst_interval_seconds": config.burst_interval_seconds,
         "moon_zoom_threshold_mm": config.moon_zoom_threshold_mm,
         "countdown_seconds": config.countdown_seconds,

@@ -66,3 +66,21 @@ def test_current_file_column():
     res = col.render(t).plain
     assert "..." in res
     assert len(res.strip()) <= 24
+
+def test_vertical_byte_progress_renderables():
+    prog = create_byte_progress()
+    t_id = prog.add_task("Ingestao Test", total=1024*1024*100, filename="teste.jpg")
+    prog.update(t_id, advance=1024*1024*50)
+    renderables = list(prog.get_renderables())
+    assert len(renderables) == 1
+    table = renderables[0]
+    assert hasattr(table, "columns")
+
+def test_vertical_item_progress_renderables():
+    prog = create_item_progress(unit="arqs/s")
+    t_id = prog.add_task("Contagem Test", total=20, filename="foto.jpg")
+    prog.update(t_id, advance=10)
+    renderables = list(prog.get_renderables())
+    assert len(renderables) == 1
+    table = renderables[0]
+    assert hasattr(table, "columns")

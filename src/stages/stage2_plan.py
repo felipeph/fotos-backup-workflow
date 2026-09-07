@@ -43,7 +43,10 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
 
         meta_list = extract_metadata_batch(files, progress_callback=on_progress)
 
-    console.print("⚙️  [cyan]Classificando e agrupando mídias (Astro, GoPro, Vídeos, Rajadas, Avulsas)...[/cyan]")
+    if config.enable_burst_detection:
+        console.print("⚙️  [cyan]Classificando e agrupando mídias (Astro, GoPro, Vídeos, Rajadas, Avulsas)...[/cyan]")
+    else:
+        console.print("⚙️  [cyan]Classificando e organizando mídias por dia (Astro, GoPro, Vídeos, Fotos)...[/cyan]")
     classified_items = classify_media_batch(meta_list, config)
 
     # Map of staging path -> ClassifiedItem

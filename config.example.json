@@ -6,6 +6,7 @@
   "timelapse_min_photos": 500,
   "timelapse_max_interval_seconds": 120.0,
   "timelapse_tolerance_ratio": 0.3,
+  "enable_burst_detection": false,
   "burst_interval_seconds": 3.0,
   "moon_zoom_threshold_mm": 1200.0,
   "countdown_seconds": 180,

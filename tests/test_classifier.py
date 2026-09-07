@@ -26,9 +26,29 @@ def create_mock_photo(name: str, ts: datetime, cam: str = "SX60", focal: float =
         is_raw=is_raw,
     )
 
-def test_classifier_burst_and_avulsas():
+def test_classifier_photos_organized_directly_by_day_when_bursts_disabled():
     base_t = datetime(2026, 9, 6, 14, 0, 0)
-    config = PipelineConfig(burst_interval_seconds=3.0)
+    config = PipelineConfig()  # enable_burst_detection defaults to False
+
+    # 3 photos in 1s interval + 1 photo after 10s
+    p1 = create_mock_photo("IMG_001.JPG", base_t)
+    p2 = create_mock_photo("IMG_002.JPG", base_t + timedelta(seconds=1))
+    p3 = create_mock_photo("IMG_003.JPG", base_t + timedelta(seconds=2))
+    p4 = create_mock_photo("IMG_004.JPG", base_t + timedelta(seconds=12))
+
+    classified = classify_media_batch([p1, p2, p3, p4], config)
+    assert len(classified) == 4
+
+    expected_dir = Path("Biblioteca") / "2026" / "09" / "06"
+    for item in classified:
+        assert item.relative_dest_dir == expected_dir
+        assert "rajada" not in str(item.relative_dest_dir)
+        assert "avulsas" not in str(item.relative_dest_dir)
+        assert item.category == "avulsa"
+
+def test_classifier_burst_and_avulsas_when_enabled():
+    base_t = datetime(2026, 9, 6, 14, 0, 0)
+    config = PipelineConfig(enable_burst_detection=True, burst_interval_seconds=3.0)
 
     # 3 burst photos (interval 1s)
     p1 = create_mock_photo("IMG_001.JPG", base_t)
@@ -68,7 +88,7 @@ def test_classifier_astro_moon_raw():
 
 def test_classifier_gopro_normal_photos():
     base_t = datetime(2026, 9, 6, 8, 0, 0)
-    config = PipelineConfig(timelapse_min_photos=500, burst_interval_seconds=3.0)
+    config = PipelineConfig(timelapse_min_photos=500, enable_burst_detection=True, burst_interval_seconds=3.0)
 
     # GoPro photos under 500 count: should be burst (if close) or avulsa
     p1 = create_mock_photo("GOPR001.JPG", base_t, cam="HERO5-Black", make="GoPro")
@@ -107,7 +127,7 @@ def test_classifier_true_timelapse_500_photos():
 
 def test_classifier_long_burst_under_500_is_rajada():
     base_t = datetime(2026, 9, 6, 10, 0, 0)
-    config = PipelineConfig(timelapse_min_photos=500, burst_interval_seconds=3.0)
+    config = PipelineConfig(timelapse_min_photos=500, enable_burst_detection=True, burst_interval_seconds=3.0)
 
     # 200 sports burst photos taken at 0.5s intervals: NOT timelapse because < 500 photos
     photos = [

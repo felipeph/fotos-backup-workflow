@@ -1,5 +1,12 @@
 import os
 import sys
+
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from pathlib import Path
 from src.config import PipelineConfig, save_config
 from src.preflight import check_preflight
@@ -37,9 +44,12 @@ def display_menu(config: PipelineConfig, project: Project | None = None) -> str:
     status_ff = "✅ OK" if pf.ffprobe_ok else "❌ Ausente"
     drives_str = ", ".join(pf.removable_drives) if pf.removable_drives else "Nenhum detectado"
 
-    print(f"[STATUS] Exiftool: {status_exif} | FFprobe: {status_ff} | Espaço Livre: {pf.free_disk_space_gb} GB")
-    print(f"[DRIVES] Cartões Removíveis: {drives_str}")
-    print(f"[DESTINO] {config.destination_root}")
+    print("[STATUS DO AMBIENTE]")
+    print(f"  • Exiftool:           {status_exif}")
+    print(f"  • FFprobe:            {status_ff}")
+    print(f"  • Espaço Livre SSD:   {pf.free_disk_space_gb} GB")
+    print(f"  • Cartões Removíveis: {drives_str}")
+    print(f"  • Raiz de Destino:    {config.destination_root}")
     print("-" * 74)
     print(" [ENTER] 🚀 EXECUTAR TUDO (Sequencial 1 a 7 com pausas de 180s e alertas)")
     print("-" * 74)
@@ -117,7 +127,8 @@ def settings_menu(config: PipelineConfig):
         print(f" 2. Pasta de Staging: {config.staging_dir}")
         print(f" 3. Pasta UPLOADED: {config.uploaded_dir}")
         print(f" 4. Script Timelapse Studio: {config.timelapse_studio_path}")
-        print(f" 5. Intervalo de Rajada: {config.burst_interval_seconds}s")
+        burst_desc = f"Ativado ({config.burst_interval_seconds}s)" if config.enable_burst_detection else "Desativado (Apenas por dia)"
+        print(f" 5. Detecção de Rajadas: {burst_desc}")
         print(f" 6. Tempo do Timer Countdown: {config.countdown_seconds}s")
         print(f" 7. Notificações Windows Toast: {'Ativado' if config.notifications.toast_enabled else 'Desativado'}")
         print(f" 8. Notificações ntfy.sh (Tópico): {config.notifications.ntfy_topic}")
@@ -148,13 +159,21 @@ def settings_menu(config: PipelineConfig):
                 config.timelapse_studio_path = val
                 save_config(config)
         elif op == "5":
-            val = input(f"Novo intervalo de rajada [{config.burst_interval_seconds}]: ").strip()
-            if val:
-                try:
-                    config.burst_interval_seconds = float(val)
-                    save_config(config)
-                except ValueError:
-                    pass
+            current_st = "Ativado" if config.enable_burst_detection else "Desativado (Apenas por dia)"
+            print(f"\nStatus atual da detecção de rajadas: {current_st}")
+            ans = input("Deseja alternar ativação das rajadas? [S/N]: ").strip().lower()
+            if ans in ("s", "sim", "y", "yes"):
+                config.enable_burst_detection = not config.enable_burst_detection
+                if config.enable_burst_detection:
+                    val = input(f"Intervalo de rajada em segundos [{config.burst_interval_seconds}]: ").strip()
+                    if val:
+                        try:
+                            config.burst_interval_seconds = float(val)
+                        except ValueError:
+                            pass
+                save_config(config)
+                print(f"Configuração salva: {'Ativado' if config.enable_burst_detection else 'Desativado'}")
+                input("Pressione ENTER para continuar...")
         elif op == "6":
             val = input(f"Novo timer [{config.countdown_seconds}]: ").strip()
             if val:

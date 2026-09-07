@@ -44,11 +44,11 @@ Cada lote de fotos/vídeos é gerenciado como um **Projeto/Sessão** independent
 ### 2. Leitura, Classificação & Criação do Plano (`project_plan.json`)
 - Lê os arquivos copiados no SSD e extrai metadados (EXIF e codecs de vídeo).
 - Classifica automaticamente em:
-  - 🌕 `astro_lua`: RAW `.CR2` em zoom máximo na SX60/SX50.
-  - ⏱️ `timelapse_gopro`: fotos sequenciais GoPro.
-  - 🦅 `rajada`: disparos com intervalo $\le 3\text{s}$ (pastas `rajada_HH-mm-SS`).
-  - 📷 `avulsa`: fotos isoladas (pasta `avulsas`).
-  - 🎥 `video`: vídeos das câmeras (pasta `videos`).
+  - 🌕 `astro_lua`: RAW `.CR2` em zoom máximo na SX60/SX50 (pastas `Astrofotografia/Lua/YYYY/MM/DD/sessao_HH-mm-SS`).
+  - ⏱️ `timelapse`: timelapses contínuos com cadência estável $\ge 500$ fotos (pastas `Timelapses/Camera/YYYY/MM/DD/timelapse_HH-mm-SS`).
+  - 📷 `avulsa` / `foto`: fotos organizadas diretamente por dia (`Biblioteca/YYYY/MM/DD`).
+  - 🦅 `rajada`: opcional/dormente (`enable_burst_detection: true`), agrupa disparos $\le 3\text{s}$ (pastas `rajada_HH-mm-SS`).
+  - 🎥 `video`: vídeos das câmeras (pasta `Biblioteca/YYYY/MM/DD/videos`).
 - Gera o plano de renomeação completo e grava o log da etapa.
 
 ### 3. Execução da Renomeação e Organização Física
@@ -155,6 +155,7 @@ python -m pytest tests/ -v
   "staging_dir": "D:/Fotos_Organizadas/staging",
   "uploaded_dir": "D:/Fotos_Organizadas/UPLOADED",
   "timelapse_studio_path": "C:/code/timelapse/timelapse_studio.py",
+  "enable_burst_detection": false,
   "burst_interval_seconds": 3.0,
   "moon_zoom_threshold_mm": 1200.0,
   "countdown_seconds": 180,

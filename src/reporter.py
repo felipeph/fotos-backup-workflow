@@ -44,7 +44,8 @@ class AuditReporter:
             "timelapse": "⏱️ Timelapses",
             "timelapse_gopro": "⏱️ Timelapses (GoPro)",
             "rajada": "🦅 Rajadas Rápidas",
-            "avulsa": "📷 Fotos Avulsas / Retratos",
+            "avulsa": "📷 Fotos (Biblioteca)",
+            "foto": "📷 Fotos (Biblioteca)",
             "video": "🎥 Vídeos (Câmeras)",
         }
 

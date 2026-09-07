@@ -25,7 +25,7 @@ def run_stage4(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
 
     upload_candidates = [
         it for it in project.items
-        if it.category in ("rajada", "avulsa", "video") and not it.uploaded_at
+        if it.category in ("rajada", "avulsa", "foto", "video") and not it.uploaded_at
     ]
 
     if not upload_candidates:

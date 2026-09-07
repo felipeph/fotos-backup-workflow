@@ -4,6 +4,12 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from src.config import load_config, PipelineConfig
 from src.project import Project, list_projects, load_project, create_project
 from src.preflight import check_preflight, find_removable_drives
