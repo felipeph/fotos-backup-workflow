@@ -47,6 +47,9 @@ def run_stage5(project: Project, config: PipelineConfig) -> bool:
             task_id = progress.add_task("[bold blue]Movendo para UPLOADED", total=total)
 
             for idx, it in enumerate(uploaded_candidates, start=1):
+                cur_fname = it.target_filename or Path(it.organized_path).name
+                progress.update(task_id, filename=cur_fname)
+
                 # Resume check
                 if it.uploaded_path and Path(it.uploaded_path).exists():
                     success_count += 1

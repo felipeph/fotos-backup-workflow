@@ -37,9 +37,9 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
     start_time = datetime.now()
 
     with create_item_progress(unit="arqs/s") as progress:
-        task_id = progress.add_task("[bold blue]Extração de Metadados", total=len(files))
-        def on_progress(done, total):
-            progress.update(task_id, completed=done)
+        task_id = progress.add_task("[bold blue]Extração de Metadados", total=len(files), filename="")
+        def on_progress(done, total, current_file=""):
+            progress.update(task_id, completed=done, filename=current_file)
 
         meta_list = extract_metadata_batch(files, progress_callback=on_progress)
 

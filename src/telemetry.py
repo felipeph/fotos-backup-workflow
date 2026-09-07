@@ -46,12 +46,30 @@ class SpeedPerSecondColumn(ProgressColumn):
             return Text(f"--.- {self.unit}", style="dim")
         return Text(f"{speed:.1f} {self.unit}", style="magenta")
 
+class CurrentFileColumn(ProgressColumn):
+    """Exibe o nome do arquivo atual que está sendo transferido ou processado com largura fixa anti-jitter."""
+    
+    def __init__(self, max_width: int = 26, table_column=None):
+        self.max_width = max_width
+        super().__init__(table_column=table_column)
+
+    def render(self, task) -> Text:
+        fn = task.fields.get("filename", "")
+        if not fn:
+            return Text(" " * (self.max_width + 2))
+        if len(fn) > self.max_width:
+            prefix_len = max(self.max_width - 8, 3)
+            fn = f"{fn[:prefix_len]}...{fn[-5:]}"
+        formatted = f"↳ {fn}"
+        return Text(f"{formatted:<{self.max_width + 2}}", style="yellow")
+
 def create_byte_progress() -> Progress:
     """Barra de progresso para transferência de arquivos e I/O em bytes."""
     return Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
-        BarColumn(bar_width=30),
+        CurrentFileColumn(max_width=24),
+        BarColumn(bar_width=20),
         TaskProgressColumn(),
         DownloadColumn(),
         TransferSpeedColumn(),
@@ -70,7 +88,8 @@ def create_item_progress(unit: str = "arqs/s") -> Progress:
     return Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
-        BarColumn(bar_width=30),
+        CurrentFileColumn(max_width=24),
+        BarColumn(bar_width=20),
         TaskProgressColumn(),
         MofNCompleteColumn(),
         TextColumn("•"),

@@ -101,7 +101,7 @@ def format_duration(seconds: float | None) -> str:
 
 def extract_metadata_batch(
     file_paths: list[Path],
-    progress_callback: Optional[Callable[[int, int], None]] = None
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
 ) -> list[MediaMetadata]:
     """Extracts metadata for a batch of files using exiftool in safe chunks with an argfile and ffprobe."""
     if not file_paths:
@@ -162,7 +162,11 @@ def extract_metadata_batch(
                     pass
 
             if progress_callback:
-                progress_callback(min(i + len(batch), len(file_paths)), len(file_paths))
+                cur_name = batch[-1].name if batch else ""
+                try:
+                    progress_callback(min(i + len(batch), len(file_paths)), len(file_paths), cur_name)
+                except TypeError:
+                    progress_callback(min(i + len(batch), len(file_paths)), len(file_paths))
 
     for p in file_paths:
         p_res = p.resolve()

@@ -68,6 +68,7 @@ def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
 
             for idx, it in enumerate(verified_candidates, start=1):
                 p = Path(it.uploaded_path)
+                progress.update(task_id, filename=p.name)
                 try:
                     if p.exists():
                         p.unlink()

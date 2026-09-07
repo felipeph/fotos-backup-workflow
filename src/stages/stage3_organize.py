@@ -36,6 +36,9 @@ def run_stage3(project: Project, config: PipelineConfig) -> bool:
             task_id = progress.add_task("[bold blue]Organização no SSD", total=total)
 
             for idx, it in enumerate(project.items, start=1):
+                cur_fname = it.target_filename or Path(it.staging_path).name
+                progress.update(task_id, filename=cur_fname)
+
                 # Check if already organized in a previous run (Resume)
                 if it.organized_path and Path(it.organized_path).exists():
                     success_count += 1

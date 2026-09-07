@@ -74,6 +74,7 @@ def run_stage1(
                 target_p.parent.mkdir(parents=True, exist_ok=True)
                 src_size = file_sizes[src_p]
                 orig_key = str(src_p.resolve())
+                progress.update(task_id, filename=src_p.name)
 
                 # Check if already verified in a previous interrupted run (Resume)
                 if orig_key in verified_map and target_p.exists() and target_p.stat().st_size == src_size:
