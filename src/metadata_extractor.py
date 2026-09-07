@@ -105,11 +105,66 @@ def format_focal(focal_35mm, focal_real) -> tuple[float, str]:
     except (ValueError, TypeError):
         return 0.0, "0mm"
 
+def parse_duration_seconds(val) -> float | None:
+    """Converte valores brutos de duração (float, int, '0:00:41', '12.34 s', etc.) para float de segundos."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val) if val > 0 else 0.0
+    s = str(val).strip()
+    if not s:
+        return None
+    # Formato de relógio (e.g. "0:00:41", "0:01:48", "01:23:45.67")
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                h, m, sec = parts
+                return float(h) * 3600 + float(m) * 60 + float(sec)
+            elif len(parts) == 2:
+                m, sec = parts
+                return float(m) * 60 + float(sec)
+            elif len(parts) == 4:
+                d, h, m, sec = parts
+                return float(d) * 86400 + float(h) * 3600 + float(m) * 60 + float(sec)
+        except (ValueError, TypeError):
+            pass
+    # Formato numérico ou com unidade (e.g. "12.34 s", "45s")
+    s_clean = re.sub(r"[^\d.]", "", s)
+    try:
+        return float(s_clean) if s_clean else None
+    except ValueError:
+        return None
+
+def get_video_duration_ffprobe(file_path: Path) -> float | None:
+    """Obtém a duração do vídeo diretamente com ffprobe caso o exiftool não a tenha retornado."""
+    ffprobe_bin = shutil.which("ffprobe")
+    if not ffprobe_bin:
+        return None
+    try:
+        cmd = [
+            ffprobe_bin,
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(file_path.resolve()),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if proc.returncode == 0 and proc.stdout.strip():
+            return float(proc.stdout.strip())
+    except Exception:
+        pass
+    return None
+
 def format_duration(seconds: float | None) -> str:
     if seconds is None or seconds <= 0:
         return "00s"
-    m = int(seconds // 60)
-    s = int(seconds % 60)
+    total_sec = max(1, int(round(seconds)))
+    h = total_sec // 3600
+    m = (total_sec % 3600) // 60
+    s = total_sec % 60
+    if h > 0:
+        return f"{h:02d}h{m:02d}m{s:02d}s"
     if m > 0:
         return f"{m:02d}m{s:02d}s"
     return f"{s:02d}s"
@@ -154,6 +209,7 @@ def extract_metadata_batch(
                     "-ISO",
                     "-ImageWidth",
                     "-ImageHeight",
+                    "-Duration#",
                     "-Duration",
                     "-VideoFrameRate",
                     "-@",
@@ -240,13 +296,9 @@ def extract_metadata_batch(
         if is_video:
             # Check video duration / fps
             dur_raw = raw_exif.get("Duration")
-            # Duration can be e.g. "12.34 s" or 12.34
-            dur_sec = None
-            if dur_raw:
-                try:
-                    dur_sec = float(str(dur_raw).replace("s", "").strip())
-                except ValueError:
-                    pass
+            dur_sec = parse_duration_seconds(dur_raw)
+            if (dur_sec is None or dur_sec <= 0) and p.exists():
+                dur_sec = get_video_duration_ffprobe(p)
             
             dur_str = format_duration(dur_sec)
             
