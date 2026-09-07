@@ -11,6 +11,7 @@ from src.project import Project, ProjectItem
 from src.config import PipelineConfig
 from src.metadata_extractor import PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
 from src.preflight import check_preflight, scan_source_media
+from src.notifier import timed_confirm_prompt
 from src.telemetry import create_byte_progress, print_stage_header, print_stage_summary
 
 def _copy_worker(
@@ -204,8 +205,11 @@ def run_stage1(
     if not auto_delete_sd:
         print("\n⚠️  [ATENÇÃO - REMOÇÃO DOS ARQUIVOS ORIGINAIS]")
         print("100% das fotos e vídeos foram verificados com sucesso no SSD.")
-        resp = input("Deseja apagar os arquivos originais da pasta de origem agora? (s/N): ").strip().lower()
-        delete_confirmed = (resp == "s")
+        delete_confirmed, _ = timed_confirm_prompt(
+            "Deseja apagar os arquivos originais da pasta de origem agora? (s/N)",
+            timeout_seconds=config.countdown_seconds,
+            default=False
+        )
 
     if delete_confirmed:
         print("\n🗑️  Apagando fotos e vídeos verificados na pasta de origem...")

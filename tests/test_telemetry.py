@@ -84,3 +84,33 @@ def test_vertical_item_progress_renderables():
     assert len(renderables) == 1
     table = renderables[0]
     assert hasattr(table, "columns")
+
+def test_timed_confirm_prompt_noninteractive(monkeypatch):
+    from src.notifier import timed_confirm_prompt
+
+    # 1. User inputs "s"
+    monkeypatch.setattr("builtins.input", lambda prompt="": "s")
+    conf, timed_out = timed_confirm_prompt("Confirmar?", timeout_seconds=1, default=False)
+    assert conf is True
+    assert timed_out is False
+
+    # 2. User inputs "n"
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    conf, timed_out = timed_confirm_prompt("Confirmar?", timeout_seconds=1, default=False)
+    assert conf is False
+    assert timed_out is False
+
+    # 3. User inputs Enter (empty string) -> default value
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    conf, timed_out = timed_confirm_prompt("Confirmar?", timeout_seconds=1, default=False)
+    assert conf is False
+    assert timed_out is False
+
+    # 4. EOFError (unattended without stdin) -> default and timed_out=True
+    def mock_eof(prompt=""):
+        raise EOFError()
+    monkeypatch.setattr("builtins.input", mock_eof)
+    conf, timed_out = timed_confirm_prompt("Confirmar?", timeout_seconds=1, default=False)
+    assert conf is False
+    assert timed_out is True
+

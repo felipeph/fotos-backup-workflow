@@ -52,7 +52,12 @@ def execute_stage(stage_num: int, project: Project, config: PipelineConfig, **kw
         if stage_num == 1:
             success = fn(project, config, auto_delete_sd=kwargs.get("auto_delete_sd", False))
         elif stage_num == 4:
-            success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_upload", False))
+            success = fn(
+                project,
+                config,
+                auto_confirm=kwargs.get("auto_confirm_upload", False),
+                allow_proceed_on_pending=kwargs.get("allow_proceed_on_pending", False),
+            )
         elif stage_num == 7:
             success = fn(project, config, auto_confirm=kwargs.get("auto_confirm_cleanup", False))
         else:
@@ -96,6 +101,7 @@ def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool 
                 auto_delete_sd=auto_confirm,
                 auto_confirm_upload=auto_confirm,
                 auto_confirm_cleanup=auto_confirm,
+                allow_proceed_on_pending=True,
             )
         except KeyboardInterrupt:
             console.print(f"\n[bold yellow]🛑 Pipeline sequencial interrompido pelo usuário (Ctrl+C).[/bold yellow]")
@@ -106,7 +112,7 @@ def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool 
         status_label = "Concluída" if ok else "Pendente/Aviso"
         stage_results.append((st, name, status_label, dur))
 
-        if not ok and st in (1, 2, 3, 4):
+        if not ok and st in (1, 2, 3):
             console.print(f"\n[bold red]🛑 Interrompendo sequência pois a {name} não foi concluída.[/bold red]")
             break
 

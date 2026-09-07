@@ -4,6 +4,7 @@ from datetime import datetime
 
 from src.project import Project
 from src.config import PipelineConfig
+from src.notifier import timed_confirm_prompt
 from src.telemetry import create_item_progress, print_stage_header, print_stage_summary, console
 
 def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = False) -> bool:
@@ -47,11 +48,14 @@ def run_stage7(project: Project, config: PipelineConfig, auto_confirm: bool = Fa
     if not auto_confirm:
         console.print("\n[bold yellow]⚠️  [CONFIRMAÇÃO NECESSÁRIA - EXCLUSÃO LOCAL][/bold yellow]")
         console.print("Estes arquivos já estão salvos com segurança na nuvem (Google Fotos).")
-        resp = input(f"Deseja apagar agora as {len(verified_candidates)} cópias locais da pasta UPLOADED liberando {total_mb:.1f} MB? (s/N): ").strip().lower()
-        confirmed = (resp == "s")
+        confirmed, _ = timed_confirm_prompt(
+            f"Deseja apagar agora as {len(verified_candidates)} cópias locais da pasta UPLOADED liberando {total_mb:.1f} MB? (s/N)",
+            timeout_seconds=config.countdown_seconds,
+            default=False
+        )
 
     if not confirmed:
-        console.print("ℹ️  Limpeza cancelada pelo usuário. Os arquivos foram mantidos no SSD.")
+        console.print("ℹ️  Limpeza cancelada (ou tempo esgotado). Os arquivos foram mantidos no SSD.")
         return False
 
     log_dir = Path("logs")

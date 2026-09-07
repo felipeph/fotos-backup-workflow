@@ -29,6 +29,7 @@ class Project:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     items: list[ProjectItem] = field(default_factory=list)
+    upload_status: str = ""
 
     @property
     def project_dir(self) -> Path:
@@ -47,6 +48,7 @@ class Project:
             "current_stage": self.current_stage,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "upload_status": self.upload_status,
             "items": [asdict(it) for it in self.items],
         }
         temp_file = self.plan_file.with_suffix(".tmp")
@@ -79,6 +81,7 @@ def load_project(project_id: str) -> Project | None:
             current_stage=data.get("current_stage", 0),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
+            upload_status=data.get("upload_status", ""),
             items=items,
         )
     except Exception as e:

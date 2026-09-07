@@ -109,3 +109,63 @@ def countdown_prompt(step_name: str, timeout_seconds: int = 180) -> str:
                 return "cancel"
 
         time.sleep(0.5)
+
+def timed_confirm_prompt(
+    prompt_text: str,
+    timeout_seconds: int = 180,
+    default: bool = False
+) -> tuple[bool, bool]:
+    """
+    Exibe um prompt de confirmação [S/N] com timer regressivo de timeout_seconds.
+    Se o tempo esgotar sem resposta, assume 'default' (padrão: False / Não).
+    Controles:
+      - [S / Y]: Confirma imediatamente (Sim).
+      - [N / C / Q]: Recusa imediatamente (Não).
+      - [ENTER]: Aceita o valor padrão imediatamente.
+      - [Timeout]: Adota o valor padrão automaticamente ao expirar o tempo.
+    Retorna: (confirmed: bool, timed_out: bool)
+    """
+    default_char = "S" if default else "N"
+
+    # Se stdin não for terminal interativo ou msvcrt não estiver disponível (ex: pytest, scripts batch)
+    if not sys.stdin.isatty() or msvcrt is None:
+        try:
+            resp = input(f"{prompt_text}: ").strip().lower()
+            if resp in ("s", "sim", "y", "yes"):
+                return True, False
+            elif resp in ("n", "nao", "não", "no"):
+                return False, False
+            elif not resp:
+                return default, False
+        except (EOFError, Exception):
+            pass
+        return default, True
+
+    print(f"\n❓ {prompt_text}")
+    print(f"⏳ Responda em até {timeout_seconds}s (Padrão ao expirar: [{'SIM' if default else 'NÃO'}])")
+
+    start = time.time()
+    while True:
+        elapsed = int(time.time() - start)
+        remaining = timeout_seconds - elapsed
+        if remaining <= 0:
+            print(f"\n⏰ [TEMPO ESGOTADO ({timeout_seconds}s)] Assumindo [{'SIM' if default else 'NÃO'}] por padrão.")
+            return default, True
+
+        sys.stdout.write(f"\r⏳ Tempo restante: {remaining // 60:02d}:{remaining % 60:02d} | [S] Sim / [N] Não (Padrão: {default_char}): ")
+        sys.stdout.flush()
+
+        if msvcrt and msvcrt.kbhit():
+            ch = msvcrt.getch().decode("utf-8", errors="ignore").lower()
+            if ch in ("s", "y"):
+                print("\n✅ [SIM] Confirmado pelo usuário.")
+                return True, False
+            elif ch in ("n", "c", "q"):
+                print("\n❌ [NÃO] Recusado pelo usuário.")
+                return False, False
+            elif ch in ("\r", "\n", " "):
+                print(f"\nℹ️  [PADRÃO] Assumindo [{'SIM' if default else 'NÃO'}].")
+                return default, False
+
+        time.sleep(0.5)
+

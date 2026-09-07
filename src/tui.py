@@ -31,7 +31,14 @@ def print_banner(project: Project | None = None):
     print("        📸 FOTOS BACKUP WORKFLOW - PIPELINE EM 7 ETAPAS 🚀")
     if project:
         stage_desc = STAGE_NAMES.get(project.current_stage, f"Etapa {project.current_stage}")
-        print(f"   Projeto Ativo: [{project.project_id}] | Status: [{stage_desc}]")
+        upload_info = ""
+        if project.upload_status == "pendente_timeout":
+            upload_info = " | Upload: [Pendente (Timeout 180s)]"
+        elif project.upload_status == "pendente_usuario":
+            upload_info = " | Upload: [Pendente (Recusado)]"
+        elif project.upload_status == "concluido":
+            upload_info = " | Upload: [Concluído]"
+        print(f"   Projeto Ativo: [{project.project_id}] | Status: [{stage_desc}]{upload_info}")
     else:
         print("   Nenhum projeto ativo selecionado.")
     print("=" * 74)

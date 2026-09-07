@@ -337,3 +337,72 @@ def test_stage1_ingest_from_messy_source_folder():
         finally:
             src.project.PROJECTS_DIR = old_dir
 
+def test_stage4_upload_pending_timeout_allows_proceeding_to_timelapse():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        ssd_root = root / "ssd"
+        ssd_root.mkdir()
+        tl_dir = ssd_root / "Biblioteca" / "2026" / "09" / "07" / "timelapse_01"
+        tl_dir.mkdir(parents=True)
+
+        tl_photo = tl_dir / "GOPR0001.JPG"
+        tl_photo.write_bytes(b"dummy_tl_photo")
+
+        # Mock timelapse_studio.py script
+        tl_script = root / "mock_tl_studio.py"
+        tl_script.write_text("import sys\nprint('MOCK TL STUDIO RUN OK')\nsys.exit(0)\n", encoding="utf-8")
+
+        cfg = PipelineConfig(
+            destination_root=str(ssd_root),
+            staging_dir=str(ssd_root / "staging"),
+            uploaded_dir=str(ssd_root / "UPLOADED"),
+            timelapse_studio_path=str(tl_script),
+        )
+
+        import src.project
+        old_dir = src.project.PROJECTS_DIR
+        src.project.PROJECTS_DIR = root / "projects"
+        try:
+            proj = create_project("sessao_timelapse_skip_upload", "E:/DCIM")
+            proj.current_stage = 3
+
+            # Add a normal photo and a timelapse photo
+            p1 = ProjectItem(
+                original_path="photo.jpg",
+                category="avulsa",
+                organized_path=str(tl_photo),
+                target_filename="photo.jpg",
+            )
+            p2 = ProjectItem(
+                original_path="tl.jpg",
+                category="timelapse",
+                organized_path=str(tl_photo),
+                target_filename="tl.jpg",
+            )
+            proj.items = [p1, p2]
+            proj.save()
+
+            # Mock timed_confirm_prompt to simulate timeout (180s expired)
+            from unittest.mock import patch
+            with patch("src.stages.stage4_upload.timed_confirm_prompt", return_value=(False, True)):
+                # Run Stage 4 with allow_proceed_on_pending=True (run_all behavior)
+                ok4 = run_stage4(proj, cfg, auto_confirm=False, allow_proceed_on_pending=True)
+                assert ok4 is True
+                assert proj.current_stage == 4
+                assert proj.upload_status == "pendente_timeout"
+                assert proj.items[0].uploaded_at == ""
+
+            # Run Stage 5 (Mover para UPLOADED): moves 0 files and succeeds
+            ok5 = run_stage5(proj, cfg)
+            assert ok5 is True
+            assert proj.current_stage == 5
+
+            # Run Stage 6 (Timelapse Studio): renders successfully even though upload was not done!
+            from src.stages.stage6_timelapse import run_stage6
+            ok6 = run_stage6(proj, cfg)
+            assert ok6 is True
+            assert proj.current_stage == 6
+        finally:
+            src.project.PROJECTS_DIR = old_dir
+
+
