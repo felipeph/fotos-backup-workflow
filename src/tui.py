@@ -69,7 +69,93 @@ def display_menu(config: PipelineConfig, project: Project | None = None) -> str:
     choice = input("Selecione uma opção [ENTER ou 1-7, P, C, 0]: ").strip()
     return choice
 
-def project_selection_menu(current_project: Project | None) -> Project | None:
+def prompt_create_new_project(config: PipelineConfig | None = None) -> Project:
+    print("\n➕ CRIAR NOVO PROJETO")
+    from datetime import datetime
+    default_name = datetime.now().strftime("%Y-%m-%d_sessao_%H%M%S")
+    name = input(f"Nome/ID do novo projeto [ENTER para '{default_name}']: ").strip()
+    if not name:
+        name = default_name
+
+    # Sugestão inteligente de pasta de origem (detecta cartões removíveis se houver)
+    default_src = "E:\\DCIM"
+    try:
+        from src.preflight import find_removable_drives
+        drives = find_removable_drives()
+        if drives:
+            dcim = Path(drives[0]) / "DCIM"
+            default_src = str(dcim) if dcim.exists() else drives[0]
+    except Exception:
+        pass
+
+    src = input(f"Pasta de origem [ENTER para '{default_src}']: ").strip()
+    if not src:
+        src = default_src
+
+    proj = create_project(name, src)
+    print(f"\n✅ Projeto '{name}' criado e ativado!")
+    input("Pressione ENTER para continuar...")
+    return proj
+
+def initial_project_prompt(config: PipelineConfig) -> Project | None:
+    """
+    Pergunta logo no início se deseja retomar o último projeto ou criar um novo.
+    Retorna o Project ativo ou None caso o usuário deseje sair.
+    """
+    projs = list_projects()
+    if not projs:
+        clear_screen()
+        print("=" * 74)
+        print("        📸 FOTOS BACKUP WORKFLOW - PIPELINE EM 7 ETAPAS 🚀")
+        print("=" * 74)
+        print("📂 Nenhum projeto anterior encontrado.")
+        print("➕ Vamos criar o seu primeiro projeto:\n")
+        return prompt_create_new_project(config)
+
+    latest_id = projs[0]
+    latest_proj = load_project(latest_id)
+    if not latest_proj:
+        return prompt_create_new_project(config)
+
+    stage_desc = STAGE_NAMES.get(latest_proj.current_stage, f"Etapa {latest_proj.current_stage}")
+    n_items = len(latest_proj.items)
+
+    clear_screen()
+    print("=" * 74)
+    print("        📸 FOTOS BACKUP WORKFLOW - PIPELINE EM 7 ETAPAS 🚀")
+    print("=" * 74)
+    print(f"📂 Último projeto encontrado: [{latest_proj.project_id}]")
+    print(f"   • Status:  {stage_desc}")
+    print(f"   • Mídias:  {n_items} arquivos registrados")
+    if latest_proj.source_path:
+        print(f"   • Origem:  {latest_proj.source_path}")
+    print("-" * 74)
+    print(" Como deseja começar?")
+    print("-" * 74)
+    print(f"  [ENTER] ou 1. 🔄 Retomar último projeto ({latest_proj.project_id})")
+    print("          2. ➕ Criar um NOVO projeto")
+    print("          3. 📂 Selecionar outro projeto da lista")
+    print("          0. 🚪 Sair")
+    print("-" * 74)
+
+    while True:
+        try:
+            choice = input("Selecione uma opção [ENTER/1, 2, 3, 0]: ").strip().upper()
+        except KeyboardInterrupt:
+            return None
+
+        if choice in ("", "1", "R"):
+            return latest_proj
+        elif choice in ("2", "N"):
+            return prompt_create_new_project(config)
+        elif choice in ("3", "P"):
+            selected = project_selection_menu(latest_proj, config=config)
+            return selected if selected else latest_proj
+        elif choice == "0":
+            return None
+        print("Opção inválida. Digite ENTER, 1, 2, 3 ou 0.")
+
+def project_selection_menu(current_project: Project | None, config: PipelineConfig | None = None) -> Project | None:
     clear_screen()
     print("📂 GERENCIAMENTO DE PROJETOS / SESSÕES\n")
     projs = list_projects()
@@ -92,19 +178,7 @@ def project_selection_menu(current_project: Project | None) -> Project | None:
         return current_project
 
     if choice.upper() == "N":
-        name = input("Nome/ID do novo projeto (ex: 2026-09-06_sessao_01): ").strip()
-        if not name:
-            from datetime import datetime
-            name = datetime.now().strftime("%Y-%m-%d_sessao_%H%M%S")
-
-        src = input("Pasta de origem (ex: E:\\DCIM ou C:\\Fotos_Inbox): ").strip()
-        if not src:
-            src = "E:\\DCIM"
-
-        proj = create_project(name, src)
-        print(f"\n✅ Projeto '{name}' criado e ativado!")
-        input("Pressione ENTER para continuar...")
-        return proj
+        return prompt_create_new_project(config)
 
     try:
         idx = int(choice)

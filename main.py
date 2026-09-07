@@ -23,7 +23,14 @@ from src.stages import (
     run_stage6,
     run_stage7,
 )
-from src.tui import display_menu, settings_menu, project_selection_menu, clear_screen, print_banner
+from src.tui import (
+    display_menu,
+    settings_menu,
+    project_selection_menu,
+    clear_screen,
+    print_banner,
+    initial_project_prompt,
+)
 
 from rich.table import Table
 from src.telemetry import console
@@ -128,9 +135,14 @@ def run_all_stages(project: Project, config: PipelineConfig, auto_confirm: bool 
 def interactive_loop():
     config = load_config()
 
-    # Auto-load latest project if available
-    projs = list_projects()
-    active_project: Project | None = load_project(projs[0]) if projs else None
+    try:
+        active_project = initial_project_prompt(config)
+    except KeyboardInterrupt:
+        active_project = None
+
+    if active_project is None:
+        console.print("\n👋 [bold green]Encerrando. Até logo![/bold green]\n")
+        return
 
     while True:
         try:
@@ -142,7 +154,7 @@ def interactive_loop():
                 break
 
             elif choice.upper() == "P":
-                active_project = project_selection_menu(active_project)
+                active_project = project_selection_menu(active_project, config=config)
 
             elif choice.upper() == "C":
                 settings_menu(config)
@@ -150,7 +162,7 @@ def interactive_loop():
             elif choice == "" or choice.upper() == "A":
                 # ENTER or A: RUN ALL
                 if not active_project:
-                    active_project = project_selection_menu(active_project)
+                    active_project = project_selection_menu(active_project, config=config)
                     if not active_project:
                         continue
                 clear_screen()
@@ -161,7 +173,7 @@ def interactive_loop():
                 st = int(choice)
                 if not active_project:
                     console.print("\n[yellow]ℹ️  Nenhum projeto selecionado. Crie ou selecione um projeto primeiro.[/yellow]")
-                    active_project = project_selection_menu(active_project)
+                    active_project = project_selection_menu(active_project, config=config)
                     if not active_project:
                         continue
 
