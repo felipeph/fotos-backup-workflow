@@ -20,6 +20,9 @@ class PipelineConfig:
     staging_dir: str = "D:/Fotos_Organizadas/staging"
     uploaded_dir: str = "D:/Fotos_Organizadas/UPLOADED"
     timelapse_studio_path: str = "C:/code/timelapse/timelapse_studio.py"
+    timelapse_min_photos: int = 500
+    timelapse_max_interval_seconds: float = 120.0
+    timelapse_tolerance_ratio: float = 0.3
     burst_interval_seconds: float = 3.0
     moon_zoom_threshold_mm: float = 1200.0
     countdown_seconds: int = 180
@@ -51,7 +54,7 @@ class PipelineConfig:
 
     @property
     def timelapses_path(self) -> Path:
-        return self.destination_path / "Timelapses" / "GoPro"
+        return self.destination_path / "Timelapses"
 
 def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
     path = Path(config_path)
@@ -88,6 +91,9 @@ def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
             staging_dir=staging_dir,
             uploaded_dir=uploaded_dir,
             timelapse_studio_path=tl_path,
+            timelapse_min_photos=int(data.get("timelapse_min_photos", 500)),
+            timelapse_max_interval_seconds=float(data.get("timelapse_max_interval_seconds", 120.0)),
+            timelapse_tolerance_ratio=float(data.get("timelapse_tolerance_ratio", 0.3)),
             burst_interval_seconds=float(data.get("burst_interval_seconds", 3.0)),
             moon_zoom_threshold_mm=float(data.get("moon_zoom_threshold_mm", 1200.0)),
             countdown_seconds=int(data.get("countdown_seconds", 180)),
@@ -108,6 +114,9 @@ def save_config(config: PipelineConfig, config_path: Path | str = "config.json")
         "staging_dir": config.staging_dir,
         "uploaded_dir": config.uploaded_dir,
         "timelapse_studio_path": config.timelapse_studio_path,
+        "timelapse_min_photos": config.timelapse_min_photos,
+        "timelapse_max_interval_seconds": config.timelapse_max_interval_seconds,
+        "timelapse_tolerance_ratio": config.timelapse_tolerance_ratio,
         "burst_interval_seconds": config.burst_interval_seconds,
         "moon_zoom_threshold_mm": config.moon_zoom_threshold_mm,
         "countdown_seconds": config.countdown_seconds,

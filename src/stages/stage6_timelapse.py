@@ -13,7 +13,7 @@ def run_stage6(project: Project, config: PipelineConfig) -> bool:
     Etapa 6: Detecção dos arquivos de timelapse e integração direta
     com o timelapse_studio.py configurado no config.json.
     """
-    tl_items = [it for it in project.items if it.category == "timelapse_gopro"]
+    tl_items = [it for it in project.items if it.category.startswith("timelapse")]
     if not tl_items:
         console.print("\n[yellow]ℹ️  [ETAPA 6] Nenhuma captura de timelapse identificada neste projeto.[/yellow]")
         project.current_stage = max(project.current_stage, 6)

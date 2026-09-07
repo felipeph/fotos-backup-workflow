@@ -41,6 +41,7 @@ class AuditReporter:
 
         cat_names = {
             "astro_lua": "🌕 Astrofotografia (Lua RAW)",
+            "timelapse": "⏱️ Timelapses",
             "timelapse_gopro": "⏱️ Timelapses (GoPro)",
             "rajada": "🦅 Rajadas Rápidas",
             "avulsa": "📷 Fotos Avulsas / Retratos",
