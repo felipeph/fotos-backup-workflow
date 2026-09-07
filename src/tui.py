@@ -39,7 +39,8 @@ def print_banner(project: Project | None = None):
 def display_menu(config: PipelineConfig, project: Project | None = None) -> str:
     print_banner(project)
 
-    pf = check_preflight(config.destination_root)
+    source_to_check = project.source_path if (project and project.source_path) else None
+    pf = check_preflight(config.destination_root, source_path=source_to_check)
     status_exif = "✅ OK" if pf.exiftool_ok else "❌ Ausente"
     status_ff = "✅ OK" if pf.ffprobe_ok else "❌ Ausente"
     drives_str = ", ".join(pf.removable_drives) if pf.removable_drives else "Nenhum detectado"
@@ -48,6 +49,11 @@ def display_menu(config: PipelineConfig, project: Project | None = None) -> str:
     print(f"  • Exiftool:           {status_exif}")
     print(f"  • FFprobe:            {status_ff}")
     print(f"  • Espaço Livre SSD:   {pf.free_disk_space_gb} GB")
+    if source_to_check:
+        status_space = "✅ Suficiente" if pf.has_enough_space else "❌ Insuficiente"
+        print(f"  • Origem Ativa:       {source_to_check}")
+        print(f"  • Mídias Filtradas:   {pf.source_media_count} fotos/vídeos ({pf.source_media_size_gb} GB)")
+        print(f"  • Status de Espaço:   {status_space}")
     print(f"  • Cartões Removíveis: {drives_str}")
     print(f"  • Raiz de Destino:    {config.destination_root}")
     print("-" * 74)

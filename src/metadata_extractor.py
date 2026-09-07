@@ -9,8 +9,37 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".cr2", ".png", ".dng", ".tif", ".tiff"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".m4v"}
+RAW_EXTENSIONS = {
+    ".cr2", ".cr3", ".crw",
+    ".arw", ".srf", ".sr2",
+    ".nef", ".nrw",
+    ".raf",
+    ".rw2",
+    ".orf", ".ori",
+    ".pef", ".ptx",
+    ".dng",
+    ".rwl",
+    ".3fr", ".fff",
+    ".iiq",
+    ".mrw",
+    ".srw",
+    ".x3f",
+    ".gpr",
+    ".raw",
+}
+
+STANDARD_PHOTO_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".tif", ".tiff",
+    ".heic", ".heif", ".webp", ".bmp", ".avif",
+}
+
+PHOTO_EXTENSIONS = STANDARD_PHOTO_EXTENSIONS | RAW_EXTENSIONS
+
+VIDEO_EXTENSIONS = {
+    ".mp4", ".mov", ".avi", ".mkv", ".m4v",
+    ".wmv", ".flv", ".webm", ".mts", ".m2ts",
+    ".ts", ".3gp", ".insv", ".lrf",
+}
 
 @dataclass
 class MediaMetadata:
@@ -243,7 +272,7 @@ def extract_metadata_batch(
         p_res = p.resolve()
         ext = p.suffix.lower()
         is_video = ext in VIDEO_EXTENSIONS
-        is_raw = ext in {".cr2", ".dng"}
+        is_raw = ext in RAW_EXTENSIONS
         raw_exif = exif_map.get(str(p_res), {})
 
         # Date parsing

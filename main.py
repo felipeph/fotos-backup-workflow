@@ -201,7 +201,9 @@ def main():
     st_p.add_argument("--source", "-s", help="Pasta de origem (necessária na etapa 1)")
 
     # Command: preflight
-    subparsers.add_parser("preflight", help="Verifica integridade do ambiente e ferramentas")
+    pf_p = subparsers.add_parser("preflight", help="Verifica integridade do ambiente e ferramentas")
+    pf_p.add_argument("--source", "-s", help="Pasta de origem (pasta bagunçada ou SD)")
+    pf_p.add_argument("--project", "-p", help="Nome do projeto para obter a pasta de origem")
 
     args = parser.parse_args()
     config = load_config()
@@ -209,12 +211,30 @@ def main():
     if not args.command:
         interactive_loop()
     elif args.command == "preflight":
-        pf = check_preflight(config.destination_root)
-        print(f"Python: {pf.python_version} ({'OK' if pf.python_ok else 'Desatualizado'})")
-        print(f"Exiftool: {pf.exiftool_path}")
-        print(f"FFprobe: {pf.ffprobe_path}")
-        print(f"Destino Gravável: {pf.destination_writable} ({pf.free_disk_space_gb} GB livres)")
-        print(f"Cartões Detectados: {pf.removable_drives}")
+        src = args.source
+        if not src and args.project:
+            proj = load_project(args.project)
+            if proj:
+                src = proj.source_path
+
+        pf = check_preflight(config.destination_root, source_path=src)
+        print("=" * 64)
+        print("           VERIFICAÇÃO DE PRÉ-VOO (PREFLIGHT)")
+        print("=" * 64)
+        print(f"Python:             {pf.python_version} ({'OK' if pf.python_ok else 'Desatualizado'})")
+        print(f"Exiftool:           {pf.exiftool_path}")
+        print(f"FFprobe:            {pf.ffprobe_path}")
+        print(f"Destino Gravável:   {pf.destination_writable} ({pf.free_disk_space_gb} GB livres em {config.destination_root})")
+        print(f"Cartões Detectados: {pf.removable_drives or 'Nenhum'}")
+        if src:
+            print("-" * 64)
+            print(f"Origem Analisada:   {src}")
+            print(f"Mídias Filtradas:   {pf.source_media_count} fotos/vídeos")
+            print(f"Espaço Necessário:  {pf.source_media_size_gb} GB ({pf.source_media_bytes:,} bytes)")
+            print(f"Status de Espaço:   {'✅ Suficiente' if pf.has_enough_space else '❌ Insuficiente'}")
+            if pf.space_warning:
+                print(f"Aviso:              {pf.space_warning}")
+        print("=" * 64)
     elif args.command == "stage":
         proj = load_project(args.project)
         if not proj:

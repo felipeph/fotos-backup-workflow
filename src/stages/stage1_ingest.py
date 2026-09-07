@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.project import Project, ProjectItem
 from src.config import PipelineConfig
 from src.metadata_extractor import PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
+from src.preflight import check_preflight, scan_source_media
 from src.telemetry import create_byte_progress, print_stage_header, print_stage_summary
 
 def _copy_worker(
@@ -81,6 +82,13 @@ def run_stage1(
         print(f"[ERRO] Origem não encontrada: {source_dir}")
         return False
 
+    # Validação de Pré-Voo: Espaço no disco de destino exclusivo para as fotos/vídeos
+    pf = check_preflight(destination_root=config.destination_root, source_path=source_dir)
+    if not pf.has_enough_space:
+        print(f"\n❌ [ERRO DE ESPAÇO EM DISCO] {pf.space_warning}")
+        print("Transferência abortada para evitar corrupção por falta de espaço em disco.")
+        return False
+
     staging_dir = config.staging_path / project.project_id / "raw"
     staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -88,26 +96,14 @@ def run_stage1(
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{project.project_id}_stage1_ingestion.log"
 
-    valid_exts = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
-    media_files: list[Path] = []
-    for root, _, files in os.walk(source_dir):
-        for f in files:
-            if f.startswith("."):
-                continue
-            p = Path(root) / f
-            if p.suffix.lower() in valid_exts:
-                media_files.append(p)
-
+    media_files, total_bytes = scan_source_media(source_dir)
     if not media_files:
-        print(f"[AVISO] Nenhum arquivo de mídia encontrado em {source_dir}.")
+        print(f"[AVISO] Nenhum arquivo de foto ou vídeo encontrado em {source_dir}.")
         return False
 
-    total_bytes = 0
     file_sizes = {}
     for p in media_files:
-        sz = p.stat().st_size
-        file_sizes[p] = sz
-        total_bytes += sz
+        file_sizes[p] = p.stat().st_size
 
     print_stage_header("ETAPA 1: INGESTÃO E VALIDAÇÃO (SD -> SSD)", total_items=len(media_files), total_bytes=total_bytes)
     start_time = datetime.now()
@@ -203,28 +199,28 @@ def run_stage1(
         bytes_done=sum(it.file_size_bytes for it in verified_items),
     )
 
-    # Step: Delete files from SD card
+    # Step: Delete media files from source folder / SD card
     delete_confirmed = auto_delete_sd
     if not auto_delete_sd:
-        print("\n⚠️  [ATENÇÃO - PERDA DE DADOS NO CARTÃO SD]")
-        print("100% dos arquivos foram verificados com sucesso no seu SSD.")
-        resp = input("Deseja apagar os arquivos originais do cartão SD agora? (s/N): ").strip().lower()
+        print("\n⚠️  [ATENÇÃO - REMOÇÃO DOS ARQUIVOS ORIGINAIS]")
+        print("100% das fotos e vídeos foram verificados com sucesso no SSD.")
+        resp = input("Deseja apagar os arquivos originais da pasta de origem agora? (s/N): ").strip().lower()
         delete_confirmed = (resp == "s")
 
     if delete_confirmed:
-        print("\n🗑️  Apagando arquivos verificados do cartão SD...")
+        print("\n🗑️  Apagando fotos e vídeos verificados na pasta de origem...")
         with open(log_file, "a", encoding="utf-8") as log:
-            log.write("\n=== REMOÇÃO SEGURA NO CARTÃO SD ===\n")
+            log.write("\n=== REMOÇÃO SEGURA NA ORIGEM (APENAS FOTOS E VÍDEOS) ===\n")
             for it in verified_items:
                 orig = Path(it.original_path)
                 try:
                     if orig.exists():
                         orig.unlink()
-                        log.write(f"DELETADO NO SD: {orig}\n")
+                        log.write(f"DELETADO NA ORIGEM: {orig}\n")
                 except Exception as e:
                     log.write(f"ERRO AO DELETAR {orig}: {e}\n")
-        print("✅ Limpeza do cartão SD concluída.")
+        print("✅ Limpeza das mídias na origem concluída (arquivos não-mídia preservados).")
     else:
-        print("ℹ️  Arquivos no cartão SD foram mantidos intactos.")
+        print("ℹ️  Arquivos na pasta de origem foram mantidos intactos.")
 
     return not errors and len(verified_items) == len(media_files)

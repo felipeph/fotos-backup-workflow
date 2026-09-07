@@ -266,3 +266,74 @@ def test_video_upload_confirmation_and_transfer_to_uploaded():
             assert not Path(vid_item.uploaded_path).exists()
         finally:
             src.project.PROJECTS_DIR = old_dir
+
+def test_stage1_ingest_from_messy_source_folder():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        messy_source = root / "messy_source"
+        ssd_root = root / "ssd"
+        ssd_root.mkdir()
+
+        # Create nested folders with non-media files
+        (messy_source / "documents" / "pdf_files").mkdir(parents=True)
+        pdf = messy_source / "documents" / "pdf_files" / "report.pdf"
+        pdf.write_bytes(b"dummy_pdf_content")
+
+        txt = messy_source / "documents" / "readme.txt"
+        txt.write_bytes(b"dummy_txt_content")
+
+        zip_f = messy_source / "archive.zip"
+        zip_f.write_bytes(b"dummy_zip_content")
+
+        # Create nested folders with photos (JPG, CR3, ARW) and video (MOV)
+        (messy_source / "trip" / "day1").mkdir(parents=True)
+        jpg = messy_source / "trip" / "day1" / "IMG_1001.JPG"
+        jpg.write_bytes(b"jpg_photo_1001")
+
+        cr3 = messy_source / "trip" / "day1" / "IMG_1002.CR3"
+        cr3.write_bytes(b"cr3_raw_photo_1002")
+
+        (messy_source / "trip" / "day2").mkdir(parents=True)
+        arw = messy_source / "trip" / "day2" / "DSC_2001.ARW"
+        arw.write_bytes(b"arw_raw_photo_2001")
+
+        mov = messy_source / "trip" / "day2" / "CLIP_2002.MOV"
+        mov.write_bytes(b"mov_video_2002")
+
+        cfg = PipelineConfig(
+            destination_root=str(ssd_root),
+            staging_dir=str(ssd_root / "staging"),
+            uploaded_dir=str(ssd_root / "UPLOADED"),
+        )
+
+        import src.project
+        old_dir = src.project.PROJECTS_DIR
+        src.project.PROJECTS_DIR = root / "projects"
+        try:
+            proj = create_project("messy_session", str(messy_source))
+
+            # Run Stage 1 with auto_delete_sd=True
+            ok1 = run_stage1(proj, cfg, auto_delete_sd=True)
+            assert ok1 is True
+            assert proj.current_stage == 1
+
+            # Exactly 4 media items ingested
+            assert len(proj.items) == 4
+
+            # Photos/videos should be deleted from messy source
+            assert not jpg.exists()
+            assert not cr3.exists()
+            assert not arw.exists()
+            assert not mov.exists()
+
+            # Non-media files MUST be preserved intact!
+            assert pdf.exists()
+            assert txt.exists()
+            assert zip_f.exists()
+
+            # Staging raw files must exist
+            for item in proj.items:
+                assert Path(item.staging_path).exists()
+        finally:
+            src.project.PROJECTS_DIR = old_dir
+
