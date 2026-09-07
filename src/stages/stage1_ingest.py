@@ -5,12 +5,66 @@ import time
 import hashlib
 from pathlib import Path
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.project import Project, ProjectItem
 from src.config import PipelineConfig
-from src.storage import compute_sha256
 from src.metadata_extractor import PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
 from src.telemetry import create_byte_progress, print_stage_header, print_stage_summary
+
+def _copy_worker(
+    src_p: Path,
+    target_p: Path,
+    rel_path: Path,
+    src_size: int,
+    orig_key: str,
+    progress,
+    task_id,
+    chunk_size: int = 4 * 1024 * 1024
+) -> tuple[bool, str, ProjectItem | None, str]:
+    """
+    Copia um único arquivo do SD para o SSD calculando SHA-256 em streaming.
+    Retorna: (sucesso: bool, log_msg: str, item: ProjectItem | None, erro_msg: str)
+    """
+    hasher = hashlib.sha256()
+    temp_target = target_p.with_name(f".tmp_{target_p.name}")
+    try:
+        target_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(src_p, "rb") as fsrc, open(temp_target, "wb") as fdst:
+            while True:
+                buf = fsrc.read(chunk_size)
+                if not buf:
+                    break
+                hasher.update(buf)
+                fdst.write(buf)
+                progress.update(task_id, advance=len(buf), filename=src_p.name)
+
+        shutil.copystat(src_p, temp_target)
+        dest_size = temp_target.stat().st_size
+        src_sha = hasher.hexdigest()
+
+        if dest_size != src_size:
+            temp_target.unlink(missing_ok=True)
+            err = f"FALHA DE TAMANHO: {src_p} ({src_size} bytes) != {temp_target} ({dest_size} bytes)"
+            return (False, f"[ERRO] {err}", None, err)
+
+        # Atomic replace
+        if target_p.exists():
+            target_p.unlink()
+        temp_target.rename(target_p)
+
+        item = ProjectItem(
+            original_path=orig_key,
+            staging_path=str(target_p.resolve()),
+            sha256=src_sha,
+            file_size_bytes=src_size,
+        )
+        return (True, f"OK | SHA256:{src_sha} | {rel_path} ({src_size} bytes)", item, "")
+    except Exception as ex:
+        if temp_target.exists():
+            temp_target.unlink(missing_ok=True)
+        err = f"FALHA DE I/O AO COPIAR {src_p}: {ex}"
+        return (False, f"[ERRO] {err}", None, err)
 
 def run_stage1(
     project: Project,
@@ -18,7 +72,8 @@ def run_stage1(
     auto_delete_sd: bool = False
 ) -> bool:
     """
-    Etapa 1: Cópia dos arquivos do SD para o SSD com validação SHA-256 arquivo por arquivo.
+    Etapa 1: Cópia dos arquivos do SD para o SSD com validação SHA-256 em streaming
+    e suporte a cópia concorrente via ThreadPoolExecutor para máxima taxa de transferência.
     Somente após 100% dos arquivos verificados com sucesso, os arquivos do SD são apagados.
     """
     source_dir = Path(project.source_path)
@@ -68,65 +123,71 @@ def run_stage1(
         with create_byte_progress() as progress:
             task_id = progress.add_task("[bold blue]Ingestão SD -> SSD", total=total_bytes)
 
-            for idx, src_p in enumerate(media_files, start=1):
+            # 1. Separar itens já verificados (Resume) e itens pendentes de cópia
+            files_to_copy = []
+            for src_p in media_files:
                 rel_path = src_p.relative_to(source_dir)
                 target_p = staging_dir / rel_path
-                target_p.parent.mkdir(parents=True, exist_ok=True)
                 src_size = file_sizes[src_p]
                 orig_key = str(src_p.resolve())
-                progress.update(task_id, filename=src_p.name)
 
-                # Check if already verified in a previous interrupted run (Resume)
                 if orig_key in verified_map and target_p.exists() and target_p.stat().st_size == src_size:
                     prev_item = verified_map[orig_key]
                     verified_items.append(prev_item)
-                    progress.update(task_id, advance=src_size)
-                    log.write(f"[{idx}/{len(media_files)}] RESUME-OK | {rel_path} ({src_size} bytes)\n")
-                    continue
+                    progress.update(task_id, advance=src_size, filename=src_p.name)
+                    log.write(f"[{len(verified_items)}/{len(media_files)}] RESUME-OK | {rel_path} ({src_size} bytes)\n")
+                else:
+                    files_to_copy.append((src_p, target_p, rel_path, src_size, orig_key))
 
-                # Streaming copy with on-the-fly SHA-256 calculation
-                hasher = hashlib.sha256()
-                chunk_size = 4 * 1024 * 1024  # 4MB buffer
+            # 2. Executar cópia concorrente dos arquivos pendentes
+            last_save_time = time.time()
+            workers = max(1, config.ingest_workers)
 
+            if files_to_copy:
                 try:
-                    with open(src_p, "rb") as fsrc, open(target_p, "wb") as fdst:
-                        while True:
-                            buf = fsrc.read(chunk_size)
-                            if not buf:
-                                break
-                            hasher.update(buf)
-                            fdst.write(buf)
-                            progress.update(task_id, advance=len(buf))
+                    with ThreadPoolExecutor(max_workers=workers) as executor:
+                        future_to_file = {
+                            executor.submit(
+                                _copy_worker,
+                                src_p,
+                                target_p,
+                                rel_path,
+                                src_size,
+                                orig_key,
+                                progress,
+                                task_id,
+                            ): (src_p, rel_path, src_size, orig_key)
+                            for src_p, target_p, rel_path, src_size, orig_key in files_to_copy
+                        }
 
-                    shutil.copystat(src_p, target_p)
-                    src_sha = hasher.hexdigest()
-                    dest_sha = compute_sha256(target_p)
-                    dest_size = target_p.stat().st_size
+                        for future in as_completed(future_to_file):
+                            src_p, rel_path, src_size, orig_key = future_to_file[future]
+                            success, log_msg, item, err = future.result()
 
-                    if src_sha == dest_sha and src_size == dest_size:
-                        log_line = f"[{idx}/{len(media_files)}] OK | SHA256:{src_sha} | {rel_path} ({src_size} bytes)"
-                        log.write(log_line + "\n")
-                        item = ProjectItem(
-                            original_path=orig_key,
-                            staging_path=str(target_p.resolve()),
-                            sha256=src_sha,
-                            file_size_bytes=src_size,
-                        )
-                        verified_items.append(item)
-                        verified_map[orig_key] = item
-                    else:
-                        err_msg = f"FALHA DE INTEGRIDADE: {src_p} ({src_sha}) != {target_p} ({dest_sha})"
-                        errors.append(err_msg)
-                        log.write(f"[ERRO] {err_msg}\n")
-                except Exception as ex:
-                    err_msg = f"FALHA DE I/O AO COPIAR {src_p}: {ex}"
-                    errors.append(err_msg)
-                    log.write(f"[ERRO] {err_msg}\n")
+                            total_done = len(verified_items) + (1 if success else 0)
+                            if success and item:
+                                verified_items.append(item)
+                                verified_map[orig_key] = item
+                                log.write(f"[{total_done}/{len(media_files)}] {log_msg}\n")
+                            else:
+                                errors.append(err)
+                                log.write(f"[ERRO] [{len(verified_items)}/{len(media_files)}] {log_msg}\n")
 
-                # Checkpoint persistence every 25 files
-                if idx % 25 == 0:
+                            # Checkpoint com throttling (a cada N itens ou X segundos)
+                            now = time.time()
+                            if (
+                                len(verified_items) % config.checkpoint_interval_items == 0
+                                or (now - last_save_time) >= config.checkpoint_interval_seconds
+                            ):
+                                project.items = verified_items
+                                project.save()
+                                last_save_time = now
+                except KeyboardInterrupt:
+                    print("\n[AVISO] Ingestão interrompida pelo usuário. Salvando estado atual...")
                     project.items = verified_items
                     project.save()
+                    log.write(f"\n[INTERRUPÇÃO] Processo interrompido com {len(verified_items)}/{len(media_files)} arquivos salvos.\n")
+                    raise
 
     # Final checkpoint of Stage 1
     project.items = verified_items
@@ -166,4 +227,4 @@ def run_stage1(
     else:
         print("ℹ️  Arquivos no cartão SD foram mantidos intactos.")
 
-    return True
+    return not errors and len(verified_items) == len(media_files)

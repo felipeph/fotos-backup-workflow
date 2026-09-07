@@ -119,3 +119,65 @@ def test_stages_1_to_5_and_7_complete_flow(monkeypatch):
 
         finally:
             src.project.PROJECTS_DIR = old_dir
+
+def test_stage1_concurrent_ingestion_and_resume(monkeypatch):
+    import hashlib
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        sd_card = root / "sd_card"
+        sd_card.mkdir()
+        ssd_root = root / "ssd"
+        ssd_root.mkdir()
+
+        # Create 12 sample files
+        expected_hashes = {}
+        for i in range(12):
+            f = sd_card / f"GOPR{i:04d}.JPG"
+            content = f"sample_photo_content_number_{i}".encode("utf-8")
+            f.write_bytes(content)
+            expected_hashes[str(f.resolve())] = hashlib.sha256(content).hexdigest()
+
+        cfg = PipelineConfig(
+            destination_root=str(ssd_root),
+            staging_dir=str(ssd_root / "staging"),
+            uploaded_dir=str(ssd_root / "UPLOADED"),
+            ingest_workers=4,
+            checkpoint_interval_items=3,
+            checkpoint_interval_seconds=1.0,
+        )
+
+        import src.project
+        old_dir = src.project.PROJECTS_DIR
+        src.project.PROJECTS_DIR = root / "projects"
+        try:
+            proj = create_project("test_concurrent", str(sd_card))
+
+            # Run Stage 1 with 4 workers
+            ok = run_stage1(proj, cfg, auto_delete_sd=False)
+            assert ok is True
+            assert proj.current_stage == 1
+            assert len(proj.items) == 12
+
+            # Verify each item's SHA256 and staging file
+            for it in proj.items:
+                assert it.original_path in expected_hashes
+                assert it.sha256 == expected_hashes[it.original_path]
+                assert Path(it.staging_path).exists()
+                assert Path(it.staging_path).stat().st_size == it.file_size_bytes
+
+            # Verify reload from disk
+            reloaded = load_project("test_concurrent")
+            assert reloaded is not None
+            assert len(reloaded.items) == 12
+
+            # Run Stage 1 again to test Resume (all 12 files should be resume-ok)
+            ok_resume = run_stage1(reloaded, cfg, auto_delete_sd=True)
+            assert ok_resume is True
+            assert len(reloaded.items) == 12
+
+            # Now SD files should have been deleted
+            for f in sd_card.glob("*.JPG"):
+                assert False, f"File {f} was not deleted from SD"
+        finally:
+            src.project.PROJECTS_DIR = old_dir

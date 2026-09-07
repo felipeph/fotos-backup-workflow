@@ -23,6 +23,9 @@ class PipelineConfig:
     burst_interval_seconds: float = 3.0
     moon_zoom_threshold_mm: float = 1200.0
     countdown_seconds: int = 180
+    ingest_workers: int = 4
+    checkpoint_interval_items: int = 200
+    checkpoint_interval_seconds: float = 10.0
     naming: NamingConfig = field(default_factory=NamingConfig)
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
 
@@ -88,6 +91,9 @@ def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
             burst_interval_seconds=float(data.get("burst_interval_seconds", 3.0)),
             moon_zoom_threshold_mm=float(data.get("moon_zoom_threshold_mm", 1200.0)),
             countdown_seconds=int(data.get("countdown_seconds", 180)),
+            ingest_workers=int(data.get("ingest_workers", 4)),
+            checkpoint_interval_items=int(data.get("checkpoint_interval_items", 200)),
+            checkpoint_interval_seconds=float(data.get("checkpoint_interval_seconds", 10.0)),
             naming=naming,
             notifications=notifications,
         )
@@ -105,6 +111,9 @@ def save_config(config: PipelineConfig, config_path: Path | str = "config.json")
         "burst_interval_seconds": config.burst_interval_seconds,
         "moon_zoom_threshold_mm": config.moon_zoom_threshold_mm,
         "countdown_seconds": config.countdown_seconds,
+        "ingest_workers": config.ingest_workers,
+        "checkpoint_interval_items": config.checkpoint_interval_items,
+        "checkpoint_interval_seconds": config.checkpoint_interval_seconds,
         "naming": {
             "photo_pattern": config.naming.photo_pattern,
             "video_pattern": config.naming.video_pattern,
