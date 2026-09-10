@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime
 import statistics
@@ -12,6 +12,7 @@ class ClassifiedItem:
     category: str  # "astro_lua", "timelapse", "video", "rajada", "avulsa"
     relative_dest_dir: Path
     target_filename: str
+    extra_dest_dirs: list[Path] = field(default_factory=list)
 
 def find_timelapse_segments(photos: list[MediaMetadata], config: PipelineConfig) -> list[tuple[int, int]]:
     """
@@ -194,12 +195,14 @@ def classify_media_batch(items: list[MediaMetadata], config: PipelineConfig) -> 
     for it in video_items:
         y, m, d = it.date_str.split("-")
         vdir = Path("Biblioteca") / y / m / d / "videos"
+        vdir_extra = Path("Videos") / y / m / d / "videos"
         target_name = generate_target_filename(it, config.naming)
         classified.append(ClassifiedItem(
             metadata=it,
             category="video",
             relative_dest_dir=vdir,
             target_filename=target_name,
+            extra_dest_dirs=[vdir_extra]
         ))
 
     # Processar Fotos Gerais por Câmera / Fonte

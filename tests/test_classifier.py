@@ -250,4 +250,36 @@ def test_classifier_timelapse_with_buffer_jitter():
     for item in classified:
         assert item.category == "timelapse"
 
+def test_classifier_video_duplication():
+    base_t = datetime(2026, 9, 6, 17, 30, 0)
+    config = PipelineConfig()
+    video = MediaMetadata(
+        file_path=Path("MVI_0001.MP4"),
+        is_video=True,
+        date_str=base_t.strftime("%Y-%m-%d"),
+        time_str=base_t.strftime("%H-%M-%S"),
+        timestamp=base_t,
+        camera_model="SX60",
+        camera_make="Canon",
+        focal_length_equiv=0.0,
+        focal_str="",
+        aperture_str="",
+        shutter_str="",
+        iso_str="",
+        resolution_str="1080p",
+        fps_str="60fps",
+        duration_str="00-01-30",
+        original_stem="MVI_0001",
+        extension="MP4",
+        is_raw=False,
+    )
+
+    classified = classify_media_batch([video], config)
+    assert len(classified) == 1
+    item = classified[0]
+    assert item.category == "video"
+    assert item.relative_dest_dir == Path("Biblioteca") / "2026" / "09" / "06" / "videos"
+    assert len(item.extra_dest_dirs) == 1
+    assert item.extra_dest_dirs[0] == Path("Videos") / "2026" / "09" / "06" / "videos"
+
 

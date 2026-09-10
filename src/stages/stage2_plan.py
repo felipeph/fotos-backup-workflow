@@ -68,9 +68,14 @@ def run_stage2(project: Project, config: PipelineConfig) -> bool:
                 it.category = c_item.category
                 it.relative_dest_dir = str(c_item.relative_dest_dir)
                 it.target_filename = c_item.target_filename
+                if hasattr(c_item, 'extra_dest_dirs') and c_item.extra_dest_dirs:
+                    it.extra_dest_dirs = [str(d) for d in c_item.extra_dest_dirs]
                 cat_counts[it.category] = cat_counts.get(it.category, 0) + 1
 
                 log.write(f"[{it.category.upper()}] {Path(it.staging_path).name} -> {it.relative_dest_dir}/{it.target_filename}\n")
+                if it.extra_dest_dirs:
+                    for d in it.extra_dest_dirs:
+                        log.write(f"  + EXTRA DEST: {d}/{it.target_filename}\n")
 
     # Display Rich summary table
     table = Table(title="Resumo do Planejamento por Categoria", border_style="cyan")

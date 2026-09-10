@@ -16,6 +16,8 @@ class ProjectItem:
     relative_dest_dir: str = ""
     target_filename: str = ""
     organized_path: str = ""
+    extra_dest_dirs: list[str] = field(default_factory=list)
+    extra_organized_paths: list[str] = field(default_factory=list)
     uploaded_at: str = ""
     upload_token: str = ""
     uploaded_path: str = ""
