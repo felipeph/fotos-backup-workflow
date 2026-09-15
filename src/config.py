@@ -27,7 +27,7 @@ class PipelineConfig:
     burst_interval_seconds: float = 3.0
     moon_zoom_threshold_mm: float = 1200.0
     countdown_seconds: int = 180
-    ingest_workers: int = 4
+    ingest_workers: int = 1
     checkpoint_interval_items: int = 200
     checkpoint_interval_seconds: float = 10.0
     naming: NamingConfig = field(default_factory=NamingConfig)
@@ -99,7 +99,7 @@ def load_config(config_path: Path | str = "config.json") -> PipelineConfig:
             burst_interval_seconds=float(data.get("burst_interval_seconds", 3.0)),
             moon_zoom_threshold_mm=float(data.get("moon_zoom_threshold_mm", 1200.0)),
             countdown_seconds=int(data.get("countdown_seconds", 180)),
-            ingest_workers=int(data.get("ingest_workers", 4)),
+            ingest_workers=int(data.get("ingest_workers", 1)),
             checkpoint_interval_items=int(data.get("checkpoint_interval_items", 200)),
             checkpoint_interval_seconds=float(data.get("checkpoint_interval_seconds", 10.0)),
             naming=naming,

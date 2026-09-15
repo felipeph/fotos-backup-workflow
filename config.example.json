@@ -10,6 +10,7 @@
   "burst_interval_seconds": 3.0,
   "moon_zoom_threshold_mm": 1200.0,
   "countdown_seconds": 180,
+  "ingest_workers": 1,
   "naming": {
     "photo_pattern": "{date}_{time}_{camera}_{focal}_{aperture}_{shutter}_{iso}_{original}.{ext}",
     "video_pattern": "{date}_{time}_{camera}_{resolution}_{fps}_{duration}_{original}.{ext}"
