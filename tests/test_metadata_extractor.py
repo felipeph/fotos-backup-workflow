@@ -117,3 +117,60 @@ def test_format_duration():
     assert format_duration(3661) == "01h01m01s"
     assert format_duration(7200) == "02h00m00s"
 
+def test_media_metadata_dimensions_and_megapixels():
+    from datetime import datetime
+    from src.metadata_extractor import MediaMetadata
+    
+    meta_photo = MediaMetadata(
+        file_path=Path("sample.jpg"),
+        is_video=False,
+        date_str="2026-09-16",
+        time_str="12-00-00",
+        timestamp=datetime(2026, 9, 16, 12, 0, 0),
+        camera_model="SX60",
+        focal_length_equiv=50.0,
+        focal_str="50mm",
+        aperture_str="f4",
+        shutter_str="1-500s",
+        iso_str="ISO100",
+        resolution_str="16MP",
+        fps_str="",
+        duration_str="",
+        original_stem="sample",
+        extension="JPG",
+        is_raw=False,
+        width=4608,
+        height=3456,
+    )
+    assert meta_photo.width == 4608
+    assert meta_photo.height == 3456
+    assert meta_photo.dimensions_str == "4608x3456"
+    assert meta_photo.megapixels_str == "16MP"
+
+    meta_video = MediaMetadata(
+        file_path=Path("sample.mp4"),
+        is_video=True,
+        date_str="2026-09-16",
+        time_str="12-00-00",
+        timestamp=datetime(2026, 9, 16, 12, 0, 0),
+        camera_model="SX60",
+        focal_length_equiv=0.0,
+        focal_str="",
+        aperture_str="",
+        shutter_str="",
+        iso_str="",
+        resolution_str="1080p",
+        fps_str="30fps",
+        duration_str="10s",
+        original_stem="sample",
+        extension="MP4",
+        is_raw=False,
+        width=1920,
+        height=1080,
+    )
+    assert meta_video.width == 1920
+    assert meta_video.height == 1080
+    assert meta_video.dimensions_str == "1920x1080"
+    assert meta_video.megapixels_str == "1080p"
+
+

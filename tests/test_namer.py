@@ -101,3 +101,71 @@ def test_generate_photo_filename_gopro_hero5():
     res = generate_target_filename(meta)
     # Checks that spaces and mmmm are not present, and both make and model appear cleanly
     assert res == "2026-09-06_16-06-24_GoPro_HERO5-Black_17mm_f2-8_1-2283s_ISO100_G0016773.jpg"
+
+def test_generate_filename_with_dimensions_and_megapixels():
+    meta = MediaMetadata(
+        file_path=Path("IMG_1234.JPG"),
+        is_video=False,
+        date_str="2026-09-16",
+        time_str="10-00-00",
+        timestamp=datetime(2026, 9, 16, 10, 0, 0),
+        camera_model="EOS-R5",
+        camera_make="Canon",
+        focal_length_equiv=50.0,
+        focal_str="50mm",
+        aperture_str="f2-8",
+        shutter_str="1-500s",
+        iso_str="ISO100",
+        resolution_str="45MP",
+        fps_str="",
+        duration_str="",
+        original_stem="IMG_1234",
+        extension="JPG",
+        is_raw=False,
+        width=8192,
+        height=5464,
+    )
+    
+    # Test custom pattern with width, height, megapixels, dimensions
+    config = NamingConfig(
+        photo_pattern="{date}_{camera}_{width}x{height}_{megapixels}_{original}.{ext}"
+    )
+    res = generate_target_filename(meta, config)
+    assert res == "2026-09-16_Canon_EOS-R5_8192x5464_45MP_IMG_1234.jpg"
+
+    config_dim = NamingConfig(
+        photo_pattern="{date}_{camera}_{dimensions}_{mp}_{original}.{ext}"
+    )
+    res_dim = generate_target_filename(meta, config_dim)
+    assert res_dim == "2026-09-16_Canon_EOS-R5_8192x5464_45MP_IMG_1234.jpg"
+
+def test_generate_video_filename_with_dimensions():
+    meta = MediaMetadata(
+        file_path=Path("GH010001.MP4"),
+        is_video=True,
+        date_str="2026-09-16",
+        time_str="10-30-00",
+        timestamp=datetime(2026, 9, 16, 10, 30, 0),
+        camera_model="HERO11-Black",
+        camera_make="GoPro",
+        focal_length_equiv=0.0,
+        focal_str="",
+        aperture_str="",
+        shutter_str="",
+        iso_str="",
+        resolution_str="4K",
+        fps_str="60fps",
+        duration_str="02m30s",
+        original_stem="GH010001",
+        extension="MP4",
+        is_raw=False,
+        width=3840,
+        height=2160,
+    )
+
+    config = NamingConfig(
+        video_pattern="{date}_{camera}_{width}x{height}_{resolution}_{fps}_{duration}_{original}.{ext}"
+    )
+    res = generate_target_filename(meta, config)
+    assert res == "2026-09-16_GoPro_HERO11-Black_3840x2160_4K_60fps_02m30s_GH010001.mp4"
+

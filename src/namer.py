@@ -27,6 +27,13 @@ def generate_target_filename(meta: MediaMetadata, config: NamingConfig | None = 
     else:
         camera_str = f"{make}_{model}"
 
+    width_val = getattr(meta, "width", None)
+    height_val = getattr(meta, "height", None)
+    width_str = str(width_val) if width_val is not None else ""
+    height_str = str(height_val) if height_val is not None else ""
+    dimensions_str = getattr(meta, "dimensions_str", "") or (f"{width_str}x{height_str}" if (width_str and height_str) else "")
+    megapixels_str = getattr(meta, "megapixels_str", "") or (meta.resolution_str or "")
+
     if meta.is_video:
         pattern = config.video_pattern
         res = pattern.format(
@@ -38,6 +45,11 @@ def generate_target_filename(meta: MediaMetadata, config: NamingConfig | None = 
             camera_make=make,
             camera_model=model,
             resolution=meta.resolution_str or "1080p",
+            width=width_str,
+            height=height_str,
+            dimensions=dimensions_str,
+            megapixels=megapixels_str,
+            mp=megapixels_str,
             fps=meta.fps_str or "30fps",
             duration=meta.duration_str or "00s",
             original=original_clean,
@@ -59,6 +71,11 @@ def generate_target_filename(meta: MediaMetadata, config: NamingConfig | None = 
             shutter=meta.shutter_str or "",
             iso=meta.iso_str or "",
             resolution=meta.resolution_str or "",
+            megapixels=megapixels_str,
+            mp=megapixels_str,
+            width=width_str,
+            height=height_str,
+            dimensions=dimensions_str,
             original=original_clean,
             ext=meta.extension.lower(),
         )

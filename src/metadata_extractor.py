@@ -61,6 +61,21 @@ class MediaMetadata:
     extension: str         # e.g. "JPG"
     is_raw: bool
     camera_make: str = "Cam" # e.g. "GoPro", "Canon", "Sony"
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+    @property
+    def dimensions_str(self) -> str:
+        if self.width and self.height:
+            return f"{self.width}x{self.height}"
+        return ""
+
+    @property
+    def megapixels_str(self) -> str:
+        if self.width and self.height and not self.is_video:
+            mp = (self.width * self.height) / 1_000_000
+            return f"{round(mp)}MP" if mp >= 1 else f"{self.width}x{self.height}"
+        return self.resolution_str or ""
 
 def parse_camera_generic(raw_make: str, raw_model: str) -> tuple[str, str, str]:
     """
@@ -184,6 +199,29 @@ def get_video_duration_ffprobe(file_path: Path) -> float | None:
     except Exception:
         pass
     return None
+
+def get_video_dimensions_ffprobe(file_path: Path) -> tuple[int | None, int | None]:
+    """Obtém largura e altura do vídeo diretamente com ffprobe caso o exiftool não as tenha retornado."""
+    ffprobe_bin = shutil.which("ffprobe")
+    if not ffprobe_bin:
+        return None, None
+    try:
+        cmd = [
+            ffprobe_bin,
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=s=x:p=0",
+            str(file_path.resolve()),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if proc.returncode == 0 and proc.stdout.strip():
+            parts = proc.stdout.strip().split("x")
+            if len(parts) >= 2:
+                return int(parts[0]), int(parts[1])
+    except Exception:
+        pass
+    return None, None
 
 def format_duration(seconds: float | None) -> str:
     if seconds is None or seconds <= 0:
@@ -316,8 +354,28 @@ def extract_metadata_batch(
         iso_str = f"ISO{iso_raw}" if iso_raw else "auto"
 
         # Resolution / Duration / FPS
-        w = raw_exif.get("ImageWidth")
-        h = raw_exif.get("ImageHeight")
+        w_raw = raw_exif.get("ImageWidth")
+        h_raw = raw_exif.get("ImageHeight")
+        width = None
+        height = None
+        if w_raw is not None:
+            try:
+                width = int(round(float(w_raw)))
+            except (ValueError, TypeError):
+                width = None
+        if h_raw is not None:
+            try:
+                height = int(round(float(h_raw)))
+            except (ValueError, TypeError):
+                height = None
+
+        if (width is None or height is None) and is_video and p.exists():
+            ff_w, ff_h = get_video_dimensions_ffprobe(p)
+            if width is None:
+                width = ff_w
+            if height is None:
+                height = ff_h
+
         res_str = ""
         fps_str = ""
         dur_str = ""
@@ -340,21 +398,21 @@ def extract_metadata_batch(
             else:
                 fps_str = "30fps"
 
-            if h:
-                if h >= 2160:
+            if height:
+                if height >= 2160:
                     res_str = "4K"
-                elif h >= 1080:
+                elif height >= 1080:
                     res_str = "1080p"
-                elif h >= 720:
+                elif height >= 720:
                     res_str = "720p"
                 else:
-                    res_str = f"{h}p"
+                    res_str = f"{height}p"
             else:
                 res_str = "1080p"
         else:
-            if w and h:
-                mp = (w * h) / 1_000_000
-                res_str = f"{round(mp)}MP" if mp >= 1 else f"{w}x{h}"
+            if width and height:
+                mp = (width * height) / 1_000_000
+                res_str = f"{round(mp)}MP" if mp >= 1 else f"{width}x{height}"
             else:
                 res_str = ""
 
@@ -377,6 +435,8 @@ def extract_metadata_batch(
             original_stem=p.stem,
             extension=p.suffix.lstrip(".").upper(),
             is_raw=is_raw,
+            width=width,
+            height=height,
         )
         results.append(meta)
 
