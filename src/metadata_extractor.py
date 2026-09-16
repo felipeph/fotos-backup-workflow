@@ -325,9 +325,10 @@ def extract_metadata_batch(
                 pass
         
         if dt is None:
-            # Fallback to file mtime
-            mtime = p.stat().st_mtime
-            dt = datetime.fromtimestamp(mtime)
+            # Fallback to the oldest between file mtime and ctime
+            stat = p.stat()
+            oldest_time = min(stat.st_mtime, stat.st_ctime)
+            dt = datetime.fromtimestamp(oldest_time)
 
         date_str = dt.strftime("%Y-%m-%d")
         time_str = dt.strftime("%H-%M-%S")
